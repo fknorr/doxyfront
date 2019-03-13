@@ -39,7 +39,7 @@ def yesno_to_bool(yesno: str or None) -> bool or None:
         return True
     if yesno == 'no':
         return False
-    _log.warning('Expected "yes" or "no", got ' + yesno)
+    _log.warning('Expected "yes" or "no", got ' + str(yesno))
     return None
 
 
@@ -168,18 +168,18 @@ class Def:
 class CompoundDef(Def):
     def __init__(self):
         super().__init__()
+        self.language: str or None = None
         self.definitions: [Ref] = []
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> ('CompoundDef', [Def]):
         instance: cls = super().deserialize(root)
-        instance.language = require_attr(root.attrib, 'language')
         defs: [Def] = [instance]
 
+        instance.language = maybe_attr(root.attrib, 'language')
+
         for elem in root:
-            if elem.tag == 'innerclass':
-                instance.definitions.append(deserialize_ref(elem))
-            elif elem.tag == 'innernamespace':
+            if elem.tag.startswith('inner'):
                 instance.definitions.append(deserialize_ref(elem))
             elif elem.tag == 'sectiondef':
                 for member in elem.findall('memberdef'):
@@ -189,10 +189,16 @@ class CompoundDef(Def):
                         child = MacroDef.deserialize(member)
                     elif member.attrib['kind'] == 'typedef':
                         child = TypedefDef.deserialize(member)
-                    elif member.attrib['kind'] == 'function':
+                    elif member.attrib['kind'] in ['function', 'signal', 'slot']:
                         child = FunctionDef.deserialize(member)
                     elif member.attrib['kind'] == 'variable':
                         child = VariableDef.deserialize(member)
+                    elif member.attrib['kind'] == 'property':
+                        child = PropertyDef.deserialize(member)
+                    elif member.attrib['kind'] == 'enum':
+                        child = EnumDef.deserialize(member)
+                    elif member.attrib['kind'] == 'friend':
+                        child = FriendDef.deserialize(member)
                     else:
                         _log.warning('Unknown member kind ' + member.attrib['kind'])
 
@@ -306,15 +312,30 @@ class Param:
 
 
 class FunctionDef(Def):
+    @unique
+    class Variant(Enum):
+        FUNCTION = 0
+        SIGNAL = 1
+        SLOT = 2
+
+        @classmethod
+        def deserialize(cls, repr: str) -> 'Variant' or None:
+            try:
+                return cls.__dict__[repr.upper()]
+            except KeyError:
+                return None
+
     def __init__(self):
         super().__init__()
         self.return_type: Listing or None = None
         self.template_params: [Param] = []
         self.parameters: [Param] = []
+        self.variant: FunctionDef.Variant or None = None
 
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance: cls = super().deserialize(root)
+        instance.variant = FunctionDef.Variant.deserialize(require_attr(root.attrib, 'kind'))
         for elem in root:
             if elem.tag == 'type':
                 instance.return_type = Listing.deserialize(elem)
@@ -330,6 +351,24 @@ class VariableDef(Def):
     def __init__(self):
         super().__init__()
         self.type = None
+        self.initializer = None
+
+    @classmethod
+    def deserialize(cls, root: xml.Element):
+        instance: cls = super().deserialize(root)
+        for elem in root:
+            if elem.tag == 'type':
+                instance.return_type = Listing.deserialize(elem)
+            if elem.tag == 'initializer':
+                instance.initializer = Listing.deserialize(elem)
+        return instance
+
+
+# stub
+class PropertyDef(Def):
+    def __init__(self):
+        super().__init__()
+        self.type = None
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -338,6 +377,60 @@ class VariableDef(Def):
             if elem.tag == 'type':
                 instance.return_type = Listing.deserialize(elem)
         return instance
+
+
+class EnumValueDef(Def):
+    def __init__(self):
+        super().__init__()
+        self.initializer = None
+
+    @classmethod
+    def deserialize(cls, root: xml.Element):
+        instance: cls = super().deserialize(root)
+        for elem in root:
+            if elem.tag == 'initializer':
+                instance.initializer = Listing.deserialize(elem)
+        return instance
+
+
+class EnumDef(Def):
+    def __init__(self):
+        super().__init__()
+        self.underlying_type = None
+        self.strong = None
+        self.values = []
+
+    @classmethod
+    def deserialize(cls, root: xml.Element):
+        instance: cls = super().deserialize(root)
+        strong = maybe_attr(root.attrib, 'strong')
+        if strong:
+            instance.strong = yesno_to_bool(strong)
+        for elem in root:
+            if elem.tag == 'type':
+                instance.underlying_type = Listing.deserialize(elem)
+            if elem.tag == 'enumvalue':
+                instance.values.append(EnumValueDef.deserialize(elem))
+        return instance
+
+
+class FriendDef(Def):
+    def __init__(self):
+        super().__init__()
+        self.definition = None
+        self.values = []
+
+    @classmethod
+    def deserialize(cls, root: xml.Element):
+        instance: cls = super().deserialize(root)
+        for elem in root:
+            if elem.tag == 'definition':
+                instance.definition = Listing.deserialize(elem)
+        return instance
+
+
+class DirectoryDef(CompoundDef):
+    pass
 
 
 class FileDef(CompoundDef):
@@ -361,7 +454,16 @@ class NamespaceDef(CompoundDef):
     pass
 
 
-class ItemCompoundDef(CompoundDef):
+class GroupDef(CompoundDef):
+    pass
+
+
+# Stub
+class PageDef(CompoundDef):
+    pass
+
+
+class CompoundSingleDef(CompoundDef):
     def __init__(self):
         super().__init__()
         self.include: Include or None = None
@@ -378,11 +480,30 @@ class ItemCompoundDef(CompoundDef):
         return item, defs
 
 
-class ClassDef(ItemCompoundDef):
+class Inheritance:
+    def __init__(self):
+        self.ref: Ref or None = None
+        self.visibility: Visibility or None = None
+        self.virtual: bool or None = None
+
+    @classmethod
+    def deserialize(cls, root: xml.Element) -> 'Param':
+        instance = cls()
+        instance.ref = deserialize_ref(root)
+        instance.visibility = Visibility.deserialize(root.attrib['prot'])
+        instance.virtual = maybe_attr(root.attrib, 'virt') == 'virtual'
+        return instance
+
+
+class ClassDef(CompoundSingleDef):
     @unique
     class Variant(Enum):
         CLASS = 0
         STRUCT = 1
+        UNION = 2
+        PROTOCOL = 3
+        INTERFACE = 4
+        CATEGORY = 5
 
         @classmethod
         def deserialize(cls, repr: str) -> 'Variant' or None:
@@ -394,6 +515,7 @@ class ClassDef(ItemCompoundDef):
     def __init__(self):
         super().__init__()
         self.template_params: [Param] = []
+        self.bases: [Inheritance] = []
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> ('ClassDef', [Def]):
@@ -402,6 +524,8 @@ class ClassDef(ItemCompoundDef):
         klass.variant = cls.Variant.deserialize(require_attr(root.attrib, 'kind'))
 
         for elem in root:
+            if elem.tag == 'basecompoundref':
+                klass.bases.append(Inheritance.deserialize(elem))
             if elem.tag == 'templateparamlist':
                 for param in elem:
                     klass.template_params.append(Param.deserialize(param))
@@ -410,17 +534,37 @@ class ClassDef(ItemCompoundDef):
 
 
 def parse(file) -> [Def]:
-    tree = xml.parse(file)
+    try:
+        tree = xml.parse(file)
+    except UnicodeDecodeError as e:
+        _log.warning(e)
+        return []
+
     node = tree.getroot().find('compounddef')
-    if node.attrib['kind'] == 'file':
-        return FileDef.deserialize(node)
-    elif node.attrib['kind'] in ['class', 'struct']:
-        return ClassDef.deserialize(node)
-    elif node.attrib['kind'] == 'namespace':
-        return NamespaceDef.deserialize(node)
+    if node is None:
+        _log.warning('No compounddef in file')
+        return []
+
+    kind = require_attr(node.attrib, 'kind')
+    if kind == 'file':
+        return FileDef.deserialize(node)[1]
+    elif kind == 'dir':
+        return DirectoryDef.deserialize(node)[1]
+    elif kind in ['class', 'struct', 'union', 'protocol', 'interface', 'category']:
+        return ClassDef.deserialize(node)[1]
+    elif kind == 'namespace':
+        return NamespaceDef.deserialize(node)[1]
+    elif kind == 'group':
+        return GroupDef.deserialize(node)[1]
+    elif kind == 'page':
+        return PageDef.deserialize(node)[1]
+    else:
+        _log.warning('Unknown compounddef kind ' + kind)
+        return []
 
 
 if __name__ == '__main__':
-    with open('/home/fabian/Code/Skat/Skatprojekt/Documentation/doxygen/xml/class_framework_1_1_cache.xml') as f:
-        x = parse(f)
-        print(x)
+    import sys
+
+    with open(sys.argv[1]) as f:
+        parse(f)
