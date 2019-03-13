@@ -45,7 +45,17 @@ def yesno_to_bool(yesno: str or None) -> bool or None:
     return None
 
 
-class Markup:
+class Item:
+    def resolve_refs(self, defs: dict):
+        pass
+
+
+def maybe_resolve_refs(item: Item or None, defs: dict):
+    if item is not None:
+        item.resolve_refs(defs)
+
+
+class Markup(Item):
     def __init__(self):
         self.text = None
 
@@ -56,7 +66,7 @@ class Markup:
         return instance
 
 
-class Listing:
+class Listing(Item):
     def __init__(self):
         self.code = None
 
@@ -131,7 +141,7 @@ def deserialize_attributes(node: xml.Element) -> [Attribute]:
     return attrs
 
 
-class Def:
+class Def(Item):
     def __init__(self):
         self.id: str or None = None
         self.name: str or None = None
@@ -141,6 +151,14 @@ class Def:
         self.location: Location or None = None
         self.visibility: Visibility or None = None
         self.attributes: [Attribute]
+
+    def kind(self) -> str or None:
+        raise NotImplementedError()
+
+    def resolve_refs(self, defs: dict):
+        maybe_resolve_refs(self.brief_text, defs)
+        maybe_resolve_refs(self.detail_text, defs)
+        maybe_resolve_refs(self.in_body_text, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -171,7 +189,12 @@ class CompoundDef(Def):
     def __init__(self):
         super().__init__()
         self.language: str or None = None
-        self.definitions: [Ref] = []
+        self.members: [Ref] = []
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        for i in range(len(self.members)):
+            self.members[i] = self.members[i].resolve(defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> ('CompoundDef', [Def]):
@@ -182,7 +205,7 @@ class CompoundDef(Def):
 
         for elem in root:
             if elem.tag.startswith('inner'):
-                instance.definitions.append(deserialize_ref(elem))
+                instance.members.append(deserialize_ref(elem))
             elif elem.tag == 'sectiondef':
                 for member in elem.findall('memberdef'):
                     child = None
@@ -206,19 +229,27 @@ class CompoundDef(Def):
 
                     if child is not None:
                         defs.append(child)
-                        instance.definitions.append(SymbolicRef(child.id, child.name))
+                        instance.members.append(SymbolicRef(child.id, child.name))
 
         return instance, defs
 
 
 class Ref:
-    pass
+    def resolve(self, defs: dict) -> 'Ref':
+        return self
 
 
 class SymbolicRef(Ref):
     def __init__(self, id: str, name: str or None):
         self.id = id
         self.name = name
+
+    def resolve(self, defs: dict) -> 'Ref':
+        try:
+            return ResolvedRef(defs[self.id])
+        except KeyError:
+            warning('Unresolved reference ' + self.id)
+            return UnresolvedRef(self.name)
 
 
 class UnresolvedRef(Ref):
@@ -260,6 +291,13 @@ class MacroDef(Def):
         self.params = []
         self.substitution = None
 
+    def kind(self) -> str or None:
+        return 'macro'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        maybe_resolve_refs(self.substitution, defs)
+
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance: cls = super().deserialize(root)
@@ -278,6 +316,14 @@ class TypedefDef(Def):
         self.type = None
         self.definition = None
 
+    def kind(self) -> str or None:
+        return 'typedef'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        maybe_resolve_refs(self.type, defs)
+        maybe_resolve_refs(self.definition, defs)
+
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance: cls = super().deserialize(root)
@@ -289,11 +335,15 @@ class TypedefDef(Def):
         return instance
 
 
-class Param:
+class Param(Item):
     def __init__(self):
         self.name: str or None = None
         self.type: Listing or None = None
         self.default: Listing or None = None
+
+    def resolve_refs(self, defs: dict):
+        maybe_resolve_refs(self.type, defs)
+        maybe_resolve_refs(self.default, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> 'Param':
@@ -308,7 +358,7 @@ class Param:
             elif elem.tag == 'declname':
                 defname = maybe_text(elem)
             elif elem.tag == 'defval':
-                instance.default = maybe_text(elem)
+                instance.default = Listing.deserialize(elem)
         instance.name = declname if declname else defname
         return instance
 
@@ -334,6 +384,17 @@ class FunctionDef(Def):
         self.parameters: [Param] = []
         self.variant: FunctionDef.Variant or None = None
 
+    def kind(self) -> str or None:
+        return self.variant.name.lower() if self.variant is not None else None
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        maybe_resolve_refs(self.return_type, defs)
+        for param in self.template_params:
+            param.resolve_refs(defs)
+        for param in self.parameters:
+            param.resolve_refs(defs)
+
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance: cls = super().deserialize(root)
@@ -355,6 +416,14 @@ class VariableDef(Def):
         self.type = None
         self.initializer = None
 
+    def kind(self) -> str or None:
+        return 'variable'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        maybe_resolve_refs(self.type, defs)
+        maybe_resolve_refs(self.initializer, defs)
+
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance: cls = super().deserialize(root)
@@ -372,6 +441,13 @@ class PropertyDef(Def):
         super().__init__()
         self.type = None
 
+    def kind(self) -> str or None:
+        return 'property'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        maybe_resolve_refs(self.type, defs)
+
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance: cls = super().deserialize(root)
@@ -385,6 +461,13 @@ class EnumValueDef(Def):
     def __init__(self):
         super().__init__()
         self.initializer = None
+
+    def kind(self) -> str or None:
+        return 'enum value'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        maybe_resolve_refs(self.initializer, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -401,6 +484,15 @@ class EnumDef(Def):
         self.underlying_type = None
         self.strong = None
         self.values = []
+
+    def kind(self) -> str or None:
+        return 'enum class' if self.strong else 'enum'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        maybe_resolve_refs(self.underlying_type, defs)
+        for value in self.values:
+            value.resolve_refs(defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -420,7 +512,13 @@ class FriendDef(Def):
     def __init__(self):
         super().__init__()
         self.definition = None
-        self.values = []
+
+    def kind(self) -> str or None:
+        return 'friend'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        maybe_resolve_refs(self.definition, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -432,13 +530,17 @@ class FriendDef(Def):
 
 
 class DirectoryDef(CompoundDef):
-    pass
+    def kind(self) -> str or None:
+        return 'directory'
 
 
 class FileDef(CompoundDef):
     def __init__(self):
         super().__init__()
         self.includes: [Include] = []
+
+    def kind(self) -> str or None:
+        return 'file'
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> ('FileDef', [Def]):
@@ -453,16 +555,19 @@ class FileDef(CompoundDef):
 
 
 class NamespaceDef(CompoundDef):
-    pass
+    def kind(self) -> str or None:
+        return 'namespace'
 
 
 class GroupDef(CompoundDef):
-    pass
+    def kind(self) -> str or None:
+        return 'group'
 
 
 # Stub
 class PageDef(CompoundDef):
-    pass
+    def kind(self) -> str or None:
+        return 'page'
 
 
 class CompoundSingleDef(CompoundDef):
@@ -482,11 +587,15 @@ class CompoundSingleDef(CompoundDef):
         return item, defs
 
 
-class Inheritance:
+class Inheritance(Item):
     def __init__(self):
         self.ref: Ref or None = None
         self.visibility: Visibility or None = None
         self.virtual: bool or None = None
+
+    def resolve_refs(self, defs: dict):
+        if self.ref is not None:
+            self.ref = self.ref.resolve(defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> 'Param':
@@ -518,6 +627,17 @@ class ClassDef(CompoundSingleDef):
         super().__init__()
         self.template_params: [Param] = []
         self.bases: [Inheritance] = []
+        self.variant: ClassDef.Variant or None = None
+
+    def kind(self) -> str or None:
+        return self.variant.name.lower() if self.variant is not None else None
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        for param in self.template_params:
+            param.resolve_refs(defs)
+        for base in self.bases:
+            base.resolve_refs(defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> ('ClassDef', [Def]):
@@ -565,6 +685,12 @@ def parse(file) -> [Def]:
         return []
 
 
+def resolve_refs(def_list: [Def]):
+    defs = dict((d.id, d) for d in def_list)
+    for d in def_list:
+        d.resolve_refs(defs)
+
+
 if __name__ == '__main__':
     import os
 
@@ -573,3 +699,6 @@ if __name__ == '__main__':
         file_name = n
         with open(n) as f:
             defs += parse(f)
+
+    resolve_refs(defs)
+    print(defs)
