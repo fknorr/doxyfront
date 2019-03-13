@@ -114,6 +114,9 @@ class Visibility(Enum):
             _warning(name + ' is not a known visibility')
             return None
 
+    def __repr__(self):
+        return self.__class__.__name__ + '.' + self.name
+
 
 @unique
 class Attribute(Enum):
@@ -128,8 +131,11 @@ class Attribute(Enum):
     MUTABLE = 8
     INLINE = 9
 
+    def __repr__(self):
+        return self.__class__.__name__ + '.' + self.name
 
-def deserialize_attributes(node: xml.Element) -> [Attribute]:
+
+def deserialize_attributes(node: xml.Element) -> set:
     attrs = []
     for k, v in node.attrib.items():
         try:
@@ -138,13 +144,20 @@ def deserialize_attributes(node: xml.Element) -> [Attribute]:
                 attrs.append(a)
         except KeyError:
             pass
+    try:
+        if node.attrib['virt'] == 'virtual':
+            attrs.append(Attribute.VIRTUAL)
+    except KeyError:
+        pass
     return attrs
 
 
 class Def(Item):
     def __init__(self):
         self.id: str or None = None
+        self.qualified_name: str or None = None
         self.name: str or None = None
+        self.qualified_name: str or None = None
         self.brief_text: Markup or None = None
         self.detail_text: Markup or None = None
         self.in_body_text: Markup or None = None
@@ -173,7 +186,7 @@ class Def(Item):
 
         for elem in root:
             if elem.tag in ['name', 'compoundname']:
-                instance.name = _require_text(elem)
+                instance.qualified_name = _require_text(elem)
             elif elem.tag == 'briefdescription':
                 instance.brief_text = Markup.deserialize(elem)
             elif elem.tag == 'detaileddescription':
@@ -183,6 +196,16 @@ class Def(Item):
             elif elem.tag == 'location':
                 instance.location = Location.deserialize(elem)
         return instance
+
+    def __repr__(self):
+        repr = self.kind()
+        if repr is None:
+            repr = self.__class__.__name__
+        if self.name is not None:
+            return repr + ' ' + self.name
+        if self.qualified_name is not None:
+            return repr + ' ' + self.qualified_name
+        return repr
 
 
 class Ref:
@@ -528,7 +551,7 @@ class CompoundDef(Def):
 
                     if child is not None:
                         defs.append(child)
-                        instance.members.append(SymbolicRef(child.id, child.name))
+                        instance.members.append(SymbolicRef(child.id, child.qualified_name))
 
         return instance, defs
 
@@ -705,6 +728,16 @@ def _resolve_refs(def_list: [Def]):
         d.resolve_refs(defs)
 
 
+def _unqualify_names(d: Def, prefix: str = ''):
+    if prefix and d.qualified_name.startswith(prefix):
+        d.name = d.qualified_name[len(prefix):]
+    if isinstance(d, NamespaceDef):
+        prefix = d.qualified_name + '::'
+        for m in d.members:
+            if isinstance(m, ResolvedRef):
+                _unqualify_names(m.definition, prefix)
+
+
 def load(files: [str]) -> [Def]:
     defs = []
     global file_name
@@ -712,4 +745,11 @@ def load(files: [str]) -> [Def]:
         with open(file_name, 'rb') as f:
             defs += _parse(f)
     _resolve_refs(defs)
+
+    for d in defs:
+        _unqualify_names(d)
+    for d in defs:
+        if d.name is None:
+            d.name = d.qualified_name
+
     return defs

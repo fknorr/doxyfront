@@ -31,13 +31,13 @@ def _subgraph(root: source.DirectoryDef, level: int, max_level: int, visible: se
         return
     if level < max_level:
         print('subgraph cluster_{}_{} {{'.format(prefix, _san_id(root.id)), file=out)
-        print('{}_{}[label="{}", shape=none];'.format(prefix, _san_id(root.id), root.name), file=out)
+        print('{}_{}[label="{}", shape=none];'.format(prefix, _san_id(root.id), root.qualified_name), file=out)
         for m in root.members:
             if isinstance(m, source.ResolvedRef):
                 _subgraph(m.definition, level + 1, max_level, visible, prefix, out)
         print('}', file=out)
     else:
-        print('{}_{}[label="{}", shape=folder];'.format(prefix, _san_id(root.id), root.name), file=out)
+        print('{}_{}[label="{}", shape=folder];'.format(prefix, _san_id(root.id), root.qualified_name), file=out)
 
 
 def _visible_folders(root: source.DirectoryDef, interesting: set) -> set:
