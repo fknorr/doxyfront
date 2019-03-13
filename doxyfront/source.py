@@ -3,45 +3,45 @@ from enum import Enum, unique
 import sys
 
 
-def warning(msg: str):
+def _warning(msg: str):
     global file_name
     print('{}: {}'.format(file_name, msg), file=sys.stderr)
 
 
-def require_attr(attrs: dict, key: str) -> str or None:
+def _require_attr(attrs: dict, key: str) -> str or None:
     try:
         return attrs[key]
     except KeyError:
-        warning('Missing attribute ' + key)
+        _warning('Missing attribute ' + key)
         return None
 
 
-def maybe_attr(attrs: dict, key: str) -> str or None:
+def _maybe_attr(attrs: dict, key: str) -> str or None:
     try:
         return attrs[key]
     except KeyError:
         return None
 
 
-def require_text(node: xml.Element) -> str or None:
+def _require_text(node: xml.Element) -> str or None:
     if node.text:
         return node.text
-    warning('Missing node text')
+    _warning('Missing node text')
     return None
 
 
-def maybe_text(node: xml.Element) -> str or None:
+def _maybe_text(node: xml.Element) -> str or None:
     if node.text:
         return node.text
     return None
 
 
-def yesno_to_bool(yesno: str or None) -> bool or None:
+def _yesno_to_bool(yesno: str or None) -> bool or None:
     if yesno == 'yes':
         return True
     if yesno == 'no':
         return False
-    warning('Expected "yes" or "no", got ' + str(yesno))
+    _warning('Expected "yes" or "no", got ' + str(yesno))
     return None
 
 
@@ -50,7 +50,7 @@ class Item:
         pass
 
 
-def maybe_resolve_refs(item: Item or None, defs: dict):
+def _maybe_resolve_refs(item: Item or None, defs: dict):
     if item is not None:
         item.resolve_refs(defs)
 
@@ -94,7 +94,7 @@ class Location:
     @classmethod
     def deserialize(cls, node: xml.Element) -> 'Location' or None:
         instance = cls()
-        instance.file = require_attr(node.attrib, 'file')
+        instance.file = _require_attr(node.attrib, 'file')
         instance.line = Location.maybe_lineno(node.attrib, 'line')
         return instance
 
@@ -111,7 +111,7 @@ class Visibility(Enum):
         try:
             return cls.__dict__[name.upper()]
         except KeyError:
-            warning(name + ' is not a known visibility')
+            _warning(name + ' is not a known visibility')
             return None
 
 
@@ -134,7 +134,7 @@ def deserialize_attributes(node: xml.Element) -> [Attribute]:
     for k, v in node.attrib.items():
         try:
             a = Attribute.__dict__[k.upper()]
-            if yesno_to_bool(v):
+            if _yesno_to_bool(v):
                 attrs.append(a)
         except KeyError:
             pass
@@ -156,16 +156,16 @@ class Def(Item):
         raise NotImplementedError()
 
     def resolve_refs(self, defs: dict):
-        maybe_resolve_refs(self.brief_text, defs)
-        maybe_resolve_refs(self.detail_text, defs)
-        maybe_resolve_refs(self.in_body_text, defs)
+        _maybe_resolve_refs(self.brief_text, defs)
+        _maybe_resolve_refs(self.detail_text, defs)
+        _maybe_resolve_refs(self.in_body_text, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance = cls()
-        instance.id = require_attr(root.attrib, 'id')
+        instance.id = _require_attr(root.attrib, 'id')
 
-        prot = maybe_attr(root.attrib, 'prot')
+        prot = _maybe_attr(root.attrib, 'prot')
         if prot is not None:
             instance.visibility = Visibility.deserialize(prot)
 
@@ -173,7 +173,7 @@ class Def(Item):
 
         for elem in root:
             if elem.tag in ['name', 'compoundname']:
-                instance.name = require_text(elem)
+                instance.name = _require_text(elem)
             elif elem.tag == 'briefdescription':
                 instance.brief_text = Markup.deserialize(elem)
             elif elem.tag == 'detaileddescription':
@@ -183,55 +183,6 @@ class Def(Item):
             elif elem.tag == 'location':
                 instance.location = Location.deserialize(elem)
         return instance
-
-
-class CompoundDef(Def):
-    def __init__(self):
-        super().__init__()
-        self.language: str or None = None
-        self.members: [Ref] = []
-
-    def resolve_refs(self, defs: dict):
-        super().resolve_refs(defs)
-        for i in range(len(self.members)):
-            self.members[i] = self.members[i].resolve(defs)
-
-    @classmethod
-    def deserialize(cls, root: xml.Element) -> ('CompoundDef', [Def]):
-        instance: cls = super().deserialize(root)
-        defs: [Def] = [instance]
-
-        instance.language = maybe_attr(root.attrib, 'language')
-
-        for elem in root:
-            if elem.tag.startswith('inner'):
-                instance.members.append(deserialize_ref(elem))
-            elif elem.tag == 'sectiondef':
-                for member in elem.findall('memberdef'):
-                    child = None
-
-                    if member.attrib['kind'] == 'define':
-                        child = MacroDef.deserialize(member)
-                    elif member.attrib['kind'] == 'typedef':
-                        child = TypedefDef.deserialize(member)
-                    elif member.attrib['kind'] in ['function', 'signal', 'slot']:
-                        child = FunctionDef.deserialize(member)
-                    elif member.attrib['kind'] == 'variable':
-                        child = VariableDef.deserialize(member)
-                    elif member.attrib['kind'] == 'property':
-                        child = PropertyDef.deserialize(member)
-                    elif member.attrib['kind'] == 'enum':
-                        child = EnumDef.deserialize(member)
-                    elif member.attrib['kind'] == 'friend':
-                        child = FriendDef.deserialize(member)
-                    else:
-                        warning('Unknown member kind ' + member.attrib['kind'])
-
-                    if child is not None:
-                        defs.append(child)
-                        instance.members.append(SymbolicRef(child.id, child.name))
-
-        return instance, defs
 
 
 class Ref:
@@ -248,7 +199,7 @@ class SymbolicRef(Ref):
         try:
             return ResolvedRef(defs[self.id])
         except KeyError:
-            warning('Unresolved reference ' + self.id)
+            _warning('Unresolved reference ' + self.id)
             return UnresolvedRef(self.name)
 
 
@@ -263,8 +214,8 @@ class ResolvedRef(Ref):
 
 
 def deserialize_ref(root: xml.Element) -> Ref or None:
-    id = maybe_attr(root.attrib, 'refid')
-    name = maybe_text(root)
+    id = _maybe_attr(root.attrib, 'refid')
+    name = _maybe_text(root)
     if id is None:
         if name is None:
             return None
@@ -272,16 +223,20 @@ def deserialize_ref(root: xml.Element) -> Ref or None:
     return SymbolicRef(id, name)
 
 
-class Include:
+class Include(Item):
     def __init__(self):
         self.file: Ref or None = None
         self.local: bool or None = None
+
+    def resolve_refs(self, defs: dict):
+        if self.file:
+            self.file = self.file.resolve(defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance = cls()
         instance.file = deserialize_ref(root)
-        instance.local = yesno_to_bool(require_attr(root.attrib, 'local'))
+        instance.local = _yesno_to_bool(_require_attr(root.attrib, 'local'))
         return instance
 
 
@@ -296,7 +251,7 @@ class MacroDef(Def):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
-        maybe_resolve_refs(self.substitution, defs)
+        _maybe_resolve_refs(self.substitution, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -304,7 +259,7 @@ class MacroDef(Def):
         for elem in root:
             if elem.tag == 'param':
                 for name in elem.findall('defname'):
-                    instance.params.append(require_text(name))
+                    instance.params.append(_require_text(name))
             elif elem.tag == 'initializer':
                 instance.substitution = Listing.deserialize(elem)
         return instance
@@ -321,8 +276,8 @@ class TypedefDef(Def):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
-        maybe_resolve_refs(self.type, defs)
-        maybe_resolve_refs(self.definition, defs)
+        _maybe_resolve_refs(self.type, defs)
+        _maybe_resolve_refs(self.definition, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -342,8 +297,8 @@ class Param(Item):
         self.default: Listing or None = None
 
     def resolve_refs(self, defs: dict):
-        maybe_resolve_refs(self.type, defs)
-        maybe_resolve_refs(self.default, defs)
+        _maybe_resolve_refs(self.type, defs)
+        _maybe_resolve_refs(self.default, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> 'Param':
@@ -354,9 +309,9 @@ class Param(Item):
             if elem.tag == 'type':
                 instance.type = Listing.deserialize(elem)
             elif elem.tag == 'declname':
-                declname = maybe_text(elem)
+                declname = _maybe_text(elem)
             elif elem.tag == 'declname':
-                defname = maybe_text(elem)
+                defname = _maybe_text(elem)
             elif elem.tag == 'defval':
                 instance.default = Listing.deserialize(elem)
         instance.name = declname if declname else defname
@@ -389,7 +344,7 @@ class FunctionDef(Def):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
-        maybe_resolve_refs(self.return_type, defs)
+        _maybe_resolve_refs(self.return_type, defs)
         for param in self.template_params:
             param.resolve_refs(defs)
         for param in self.parameters:
@@ -398,7 +353,7 @@ class FunctionDef(Def):
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance: cls = super().deserialize(root)
-        instance.variant = FunctionDef.Variant.deserialize(require_attr(root.attrib, 'kind'))
+        instance.variant = FunctionDef.Variant.deserialize(_require_attr(root.attrib, 'kind'))
         for elem in root:
             if elem.tag == 'type':
                 instance.return_type = Listing.deserialize(elem)
@@ -421,8 +376,8 @@ class VariableDef(Def):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
-        maybe_resolve_refs(self.type, defs)
-        maybe_resolve_refs(self.initializer, defs)
+        _maybe_resolve_refs(self.type, defs)
+        _maybe_resolve_refs(self.initializer, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -446,7 +401,7 @@ class PropertyDef(Def):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
-        maybe_resolve_refs(self.type, defs)
+        _maybe_resolve_refs(self.type, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -467,7 +422,7 @@ class EnumValueDef(Def):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
-        maybe_resolve_refs(self.initializer, defs)
+        _maybe_resolve_refs(self.initializer, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -490,16 +445,16 @@ class EnumDef(Def):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
-        maybe_resolve_refs(self.underlying_type, defs)
+        _maybe_resolve_refs(self.underlying_type, defs)
         for value in self.values:
             value.resolve_refs(defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
         instance: cls = super().deserialize(root)
-        strong = maybe_attr(root.attrib, 'strong')
+        strong = _maybe_attr(root.attrib, 'strong')
         if strong:
-            instance.strong = yesno_to_bool(strong)
+            instance.strong = _yesno_to_bool(strong)
         for elem in root:
             if elem.tag == 'type':
                 instance.underlying_type = Listing.deserialize(elem)
@@ -518,7 +473,7 @@ class FriendDef(Def):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
-        maybe_resolve_refs(self.definition, defs)
+        _maybe_resolve_refs(self.definition, defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element):
@@ -527,6 +482,55 @@ class FriendDef(Def):
             if elem.tag == 'definition':
                 instance.definition = Listing.deserialize(elem)
         return instance
+
+
+class CompoundDef(Def):
+    def __init__(self):
+        super().__init__()
+        self.language: str or None = None
+        self.members: [Ref] = []
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        for i in range(len(self.members)):
+            self.members[i] = self.members[i].resolve(defs)
+
+    @classmethod
+    def deserialize(cls, root: xml.Element) -> ('CompoundDef', [Def]):
+        instance: cls = super().deserialize(root)
+        defs: [Def] = [instance]
+
+        instance.language = _maybe_attr(root.attrib, 'language')
+
+        for elem in root:
+            if elem.tag.startswith('inner'):
+                instance.members.append(deserialize_ref(elem))
+            elif elem.tag == 'sectiondef':
+                for member in elem.findall('memberdef'):
+                    child = None
+
+                    if member.attrib['kind'] == 'define':
+                        child = MacroDef.deserialize(member)
+                    elif member.attrib['kind'] == 'typedef':
+                        child = TypedefDef.deserialize(member)
+                    elif member.attrib['kind'] in ['function', 'signal', 'slot']:
+                        child = FunctionDef.deserialize(member)
+                    elif member.attrib['kind'] == 'variable':
+                        child = VariableDef.deserialize(member)
+                    elif member.attrib['kind'] == 'property':
+                        child = PropertyDef.deserialize(member)
+                    elif member.attrib['kind'] == 'enum':
+                        child = EnumDef.deserialize(member)
+                    elif member.attrib['kind'] == 'friend':
+                        child = FriendDef.deserialize(member)
+                    else:
+                        _warning('Unknown member kind ' + member.attrib['kind'])
+
+                    if child is not None:
+                        defs.append(child)
+                        instance.members.append(SymbolicRef(child.id, child.name))
+
+        return instance, defs
 
 
 class DirectoryDef(CompoundDef):
@@ -541,6 +545,11 @@ class FileDef(CompoundDef):
 
     def kind(self) -> str or None:
         return 'file'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        for include in self.includes:
+            include.resolve_refs(defs)
 
     @classmethod
     def deserialize(cls, root: xml.Element) -> ('FileDef', [Def]):
@@ -575,6 +584,11 @@ class CompoundSingleDef(CompoundDef):
         super().__init__()
         self.include: Include or None = None
 
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        if self.include is not None:
+            self.include.resolve_refs(defs)
+
     @classmethod
     def deserialize(cls, root: xml.Element) -> ('ClassDef', [Def]):
         item: cls
@@ -598,11 +612,11 @@ class Inheritance(Item):
             self.ref = self.ref.resolve(defs)
 
     @classmethod
-    def deserialize(cls, root: xml.Element) -> 'Param':
+    def deserialize(cls, root: xml.Element) -> 'Inheritance':
         instance = cls()
         instance.ref = deserialize_ref(root)
         instance.visibility = Visibility.deserialize(root.attrib['prot'])
-        instance.virtual = maybe_attr(root.attrib, 'virt') == 'virtual'
+        instance.virtual = _maybe_attr(root.attrib, 'virt') == 'virtual'
         return instance
 
 
@@ -643,7 +657,7 @@ class ClassDef(CompoundSingleDef):
     def deserialize(cls, root: xml.Element) -> ('ClassDef', [Def]):
         klass: cls
         klass, defs = super().deserialize(root)
-        klass.variant = cls.Variant.deserialize(require_attr(root.attrib, 'kind'))
+        klass.variant = cls.Variant.deserialize(_require_attr(root.attrib, 'kind'))
 
         for elem in root:
             if elem.tag == 'basecompoundref':
@@ -655,19 +669,19 @@ class ClassDef(CompoundSingleDef):
         return klass, defs
 
 
-def parse(file) -> [Def]:
+def _parse(file) -> [Def]:
     try:
         tree = xml.parse(file)
-    except UnicodeDecodeError as e:
-        warning(e)
+    except xml.ParseError as e:
+        _warning(e)
         return []
 
     node = tree.getroot().find('compounddef')
     if node is None:
-        warning('No compounddef in file')
+        _warning('No compounddef in file')
         return []
 
-    kind = require_attr(node.attrib, 'kind')
+    kind = _require_attr(node.attrib, 'kind')
     if kind == 'file':
         return FileDef.deserialize(node)[1]
     elif kind == 'dir':
@@ -681,24 +695,21 @@ def parse(file) -> [Def]:
     elif kind == 'page':
         return PageDef.deserialize(node)[1]
     else:
-        warning('Unknown compounddef kind ' + kind)
+        _warning('Unknown compounddef kind ' + kind)
         return []
 
 
-def resolve_refs(def_list: [Def]):
+def _resolve_refs(def_list: [Def]):
     defs = dict((d.id, d) for d in def_list)
     for d in def_list:
         d.resolve_refs(defs)
 
 
-if __name__ == '__main__':
-    import os
-
+def load(files: [str]) -> [Def]:
     defs = []
-    for n in os.listdir(os.getcwd()):
-        file_name = n
-        with open(n) as f:
-            defs += parse(f)
-
-    resolve_refs(defs)
-    print(defs)
+    global file_name
+    for file_name in files:
+        with open(file_name, 'rb') as f:
+            defs += _parse(f)
+    _resolve_refs(defs)
+    return defs
