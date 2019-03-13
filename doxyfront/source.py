@@ -1,16 +1,18 @@
 import xml.etree.ElementTree as xml
 from enum import Enum, unique
-import logging
+import sys
 
 
-_log = logging.getLogger(__name__)
+def warning(msg: str):
+    global file_name
+    print('{}: {}'.format(file_name, msg), file=sys.stderr)
 
 
 def require_attr(attrs: dict, key: str) -> str or None:
     try:
         return attrs[key]
     except KeyError:
-        _log.warning('Missing attribute ' + key)
+        warning('Missing attribute ' + key)
         return None
 
 
@@ -24,7 +26,7 @@ def maybe_attr(attrs: dict, key: str) -> str or None:
 def require_text(node: xml.Element) -> str or None:
     if node.text:
         return node.text
-    _log.warning('Missing node text')
+    warning('Missing node text')
     return None
 
 
@@ -39,7 +41,7 @@ def yesno_to_bool(yesno: str or None) -> bool or None:
         return True
     if yesno == 'no':
         return False
-    _log.warning('Expected "yes" or "no", got ' + str(yesno))
+    warning('Expected "yes" or "no", got ' + str(yesno))
     return None
 
 
@@ -99,7 +101,7 @@ class Visibility(Enum):
         try:
             return cls.__dict__[name.upper()]
         except KeyError:
-            _log.warning(name + ' is not a known visibility')
+            warning(name + ' is not a known visibility')
             return None
 
 
@@ -200,7 +202,7 @@ class CompoundDef(Def):
                     elif member.attrib['kind'] == 'friend':
                         child = FriendDef.deserialize(member)
                     else:
-                        _log.warning('Unknown member kind ' + member.attrib['kind'])
+                        warning('Unknown member kind ' + member.attrib['kind'])
 
                     if child is not None:
                         defs.append(child)
@@ -302,11 +304,11 @@ class Param:
             if elem.tag == 'type':
                 instance.type = Listing.deserialize(elem)
             elif elem.tag == 'declname':
-                declname = require_text(elem)
+                declname = maybe_text(elem)
             elif elem.tag == 'declname':
-                defname = require_text(elem)
+                defname = maybe_text(elem)
             elif elem.tag == 'defval':
-                instance.default = require_text(elem)
+                instance.default = maybe_text(elem)
         instance.name = declname if declname else defname
         return instance
 
@@ -537,12 +539,12 @@ def parse(file) -> [Def]:
     try:
         tree = xml.parse(file)
     except UnicodeDecodeError as e:
-        _log.warning(e)
+        warning(e)
         return []
 
     node = tree.getroot().find('compounddef')
     if node is None:
-        _log.warning('No compounddef in file')
+        warning('No compounddef in file')
         return []
 
     kind = require_attr(node.attrib, 'kind')
@@ -559,12 +561,15 @@ def parse(file) -> [Def]:
     elif kind == 'page':
         return PageDef.deserialize(node)[1]
     else:
-        _log.warning('Unknown compounddef kind ' + kind)
+        warning('Unknown compounddef kind ' + kind)
         return []
 
 
 if __name__ == '__main__':
-    import sys
+    import os
 
-    with open(sys.argv[1]) as f:
-        parse(f)
+    defs = []
+    for n in os.listdir(os.getcwd()):
+        file_name = n
+        with open(n) as f:
+            defs += parse(f)
