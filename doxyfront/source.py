@@ -731,7 +731,7 @@ def _resolve_refs(def_list: [Def]):
 def _unqualify_names(d: Def, prefix: str = ''):
     if prefix and d.qualified_name.startswith(prefix):
         d.name = d.qualified_name[len(prefix):]
-    if isinstance(d, NamespaceDef):
+    if (not prefix or d.qualified_name.startswith(prefix)) and isinstance(d, CompoundDef):
         prefix = d.qualified_name + '::'
         for m in d.members:
             if isinstance(m, ResolvedRef):
