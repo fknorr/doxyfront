@@ -37,11 +37,11 @@ class Fragment(Item):
         for c in self.children:
             c.resolve_refs(defs)
 
-    def render_plaintext(self) -> str:
-        return ' '.join(c.render_plaintext() for c in self.children)
+    def render_plaintext(self, context) -> str:
+        return ' '.join(c.render_plaintext(context) for c in self.children)
 
-    def render_html(self) -> str:
-        return ' '.join(c.render_html() for c in self.children)
+    def render_html(self, context) -> str:
+        return ' '.join(c.render_html(context) for c in self.children)
 
 
 class TextFragment(Fragment):
@@ -49,10 +49,10 @@ class TextFragment(Fragment):
         super().__init__()
         self.text = text
 
-    def render_plaintext(self) -> str:
+    def render_plaintext(self, context) -> str:
         return self.text
 
-    def render_html(self) -> str:
+    def render_html(self, context) -> str:
         return _html_escape(self.text)
 
 
@@ -71,8 +71,8 @@ class FormatFragment(Fragment):
         super().__init__()
         self.variant = variant
 
-    def render_html(self) -> str:
-        return '<{0}>{1}</{0}>'.format(self.variant.value.lower(), super().render_html())
+    def render_html(self, context) -> str:
+        return '<{0}>{1}</{0}>'.format(self.variant.value.lower(), super().render_html(context))
 
 
 class RefFragment(Fragment):
@@ -80,10 +80,10 @@ class RefFragment(Fragment):
         super().__init__()
         self.ref = ref
 
-    def render_html(self) -> str:
-        content = super().render_html()
+    def render_html(self, context) -> str:
+        content = super().render_html(context)
         if isinstance(self.ref, ResolvedRef):
-            return self.ref.definition.qualified_name_html()
+            return self.ref.definition.qualified_name_html(context)
         return content
 
     def resolve_refs(self, defs: dict):
@@ -96,8 +96,8 @@ class LinkFragment(Fragment):
         super().__init__()
         self.url = url
 
-    def render_html(self) -> str:
-        return '<a class="external" href="{}">{}</a>'.format(self.url, super().render_html())
+    def render_html(self, context) -> str:
+        return '<a class="external" href="{}">{}</a>'.format(self.url, super().render_html(context))
 
 
 class SectionFragment(Fragment):
@@ -105,8 +105,8 @@ class SectionFragment(Fragment):
         super().__init__()
         self.kind = kind
 
-    def render_html(self) -> str:
-        return '<section><h3>{}</h3>{}</section>'.format(self.kind, super().render_html())
+    def render_html(self, context) -> str:
+        return '<section><h3>{}</h3>{}</section>'.format(self.kind, super().render_html(context))
 
 
 _SUPERFLUOUS_WHITESPACE_RE = re.compile(r'(^\s+)|(?<=[\s(])\s+|\s+(?=[.,)])|(\s+$)')
@@ -119,11 +119,11 @@ class Markup(Item):
     def resolve_refs(self, defs: dict):
         self.root.resolve_refs(defs)
 
-    def render_plaintext(self):
-        return _SUPERFLUOUS_WHITESPACE_RE.sub('', self.root.render_plaintext())
+    def render_plaintext(self, context):
+        return _SUPERFLUOUS_WHITESPACE_RE.sub('', self.root.render_plaintext(context))
 
-    def render_html(self):
-        return self.root.render_html()
+    def render_html(self, context):
+        return self.root.render_html(context)
 
 
 class Location:
@@ -190,19 +190,19 @@ class Def(Item):
             return repr + ' ' + self.qualified_name
         return repr
 
-    def qualified_name_plaintext(self):
+    def qualified_name_plaintext(self, context: set):
         scope_parent = self.scope_parent
         text = ''
-        while scope_parent is not None:
-            text = '::'.join((scope_parent.name, text))
+        while scope_parent is not None and scope_parent not in context:
+            text = '<span class="scope">::</span>'.join((scope_parent.name, text))
             scope_parent = scope_parent.scope_parent
         return text + self.name
 
-    def qualified_name_html(self):
+    def qualified_name_html(self, context: set):
         scope_parent = self.scope_parent
         html = ''
-        while scope_parent is not None:
-            html = '<a class="ref ref-{}" href="{}">{}</a>::'.format(
+        while scope_parent is not None and scope_parent not in context:
+            html = '<a class="ref ref-{}" href="{}">{}</a><span class="scope">::</span>'.format(
                 scope_parent.kind(), scope_parent.href, scope_parent.name) + html
             scope_parent = scope_parent.scope_parent
         return '<span class="ref">{}<a class="ref ref-{}" href="{}">{}</a></span>'.format(
@@ -218,11 +218,13 @@ class Def(Item):
         return '<span class="ref">{}<a class="ref ref-{}" href="{}">{}</a></span>'.format(
             html, self.kind(), self.href, self.name)
 
-    def signature_html(self):
-        return '{} {}'.format(self.kind(), self.qualified_name_html())
+    def signature_html(self, context, fully_qualified=False):
+        return '{} {}'.format(self.kind(), self.qualified_name_html(
+            context if not fully_qualified else set()))
 
-    def signature_plaintext(self):
-        return '{} {}'.format(self.kind(), self.qualified_name_plaintext())
+    def signature_plaintext(self, context, fully_qualified=False):
+        return '{} {}'.format(self.kind(), self.qualified_name_plaintext(
+            context if not fully_qualified else set()))
 
 
 class Ref:
@@ -280,13 +282,13 @@ class MacroDef(Def, SingleDef):
         super().resolve_refs(defs)
         _maybe_resolve_refs(self.substitution, defs)
 
-    def signature_html(self):
+    def signature_html(self, context, fully_qualified=False):
         return '<span class="preprocessor">#define</span> ' \
                '<a class="ref ref-macro" href="{}">{}</a>({})'.format(
             self.href, self.name, ', '.join('<span class="param macro-param">{}</span>'.format(p)
                                             for p in self.params))
 
-    def signature_plaintext(self):
+    def signature_plaintext(self, context, fully_qualified=False):
         return '#define {}({})'.format(self.name, ', '.join(p for p in self.params))
 
 
@@ -315,16 +317,17 @@ class Param(Item):
         _maybe_resolve_refs(self.type, defs)
         _maybe_resolve_refs(self.default, defs)
 
-    def render_html(self):
+    def render_html(self, context):
         html = ''
         if self.type:
-            html += '<span class="type param-type">{}</span>'.format(self.type.render_html())
+            html += '<span class="type param-type">{}</span>'.format(self.type.render_html(context))
         if self.type and self.name:
             html += ' '
         if self.name:
             html += '<span class="param-name">{}</span>'.format(self.name)
         if self.default:
-            html += ' = <span class="param-default">{}</span>'.format(self.default.render_html())
+            html += ' = <span class="param-default">{}</span>'.format(
+                self.default.render_html(context))
         return html
 
 
@@ -355,26 +358,26 @@ class FunctionDef(Def, SingleDef):
         for param in self.parameters:
             param.resolve_refs(defs)
 
-    def signature_html(self):
+    def signature_html(self, context, fully_qualified=False):
         html = ''
         if self.template_params:
             html += '<span class="template">template&lt;{}&gt;</span> '.format(
-                ', '.join(p.render_html() for p in self.template_params))
+                ', '.join(p.render_html(context) for p in self.template_params))
         if self.return_type:
             html += '<span class="type return-type">{}</span> '.format(
-                self.return_type.render_html())
-        html += '{}({})'.format(self.qualified_name_html(),
-                                ', '.join(p.render_html() for p in self.parameters))
+                self.return_type.render_html(context))
+        html += '{}({})'.format(self.qualified_name_html(context if not fully_qualified else set()),
+                                ', '.join(p.render_html(context) for p in self.parameters))
         return html
 
-    def signature_plaintext(self):
+    def signature_plaintext(self, context, fully_qualified=False):
         text = ''
         if self.return_type:
-            text += self.return_type.render_plaintext() + ' '
-        text += self.qualified_name_plaintext()
+            text += self.return_type.render_plaintext(context) + ' '
+        text += self.qualified_name_plaintext(context if not fully_qualified else set())
         if self.template_params:
             text += '<>'
-        text += '({})'.format(', '.join(p.type.render_plaintext() for p in self.parameters))
+        text += '({})'.format(', '.join(p.type.render_plaintext(context) for p in self.parameters))
         return text
 
 

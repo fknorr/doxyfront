@@ -43,11 +43,16 @@ def category_key(d: source.Def) -> int:
 
 
 def render(title: str or None, definition: source.Def or None, members: [source.Def], file):
+    context = set()
     details = None
     include = None
     if definition is not None:
+        scope = definition
+        while scope is not None:
+            context.add(scope)
+            scope = scope.scope_parent
         if definition.detailed_description is not None:
-            details = definition.detailed_description.render_html()
+            details = definition.detailed_description.render_html(context)
         if definition.file_parent is not None:
             include = '#include &lt;{}&gt;'.format(definition.file_parent.path_html())
 
@@ -56,16 +61,17 @@ def render(title: str or None, definition: source.Def or None, members: [source.
         by_cat[category(m)].append({
             'id': m.id,
             'name': m.id,
-            'signature': m.signature_html(),
-            'brief': m.brief_description.render_plaintext() if m.brief_description else ''
+            'signature': m.signature_html(context),
+            'brief': m.brief_description.render_plaintext(context) if m.brief_description else ''
         })
 
     if title is not None:
         window_title = title
         page_title = title
     else:
-        window_title = definition.signature_plaintext()
-        page_title = '<span class="def">{}</span>'.format(definition.signature_html())
+        window_title = definition.signature_plaintext(context)
+        page_title = '<span class="def">{}</span>'.format(
+            definition.signature_html(context, fully_qualified=True))
 
     member_cats = list(sorted((c.name.lower(), list(sorted(m, key=lambda m: m['name'].lower())))
                               for (_, c), m in by_cat.items()))

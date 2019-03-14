@@ -64,3 +64,7 @@ h1 {
 .ref-macro, .preprocessor {
     color: #068000;
 }
+
+.scope {
+    letter-spacing: 0.1em;
+}
