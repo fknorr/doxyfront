@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as xml
 from enum import Enum, unique
 import sys
+import re
 
 
 def _warning(msg: str):
@@ -63,6 +64,10 @@ def _html_escape(s: str) -> str:
         .replace("'", '&apos;')
 
 
+def _elem_empty(elem: xml.Element) -> bool:
+    return len(elem) == 0 and (elem.text is None or not elem.text.strip())
+
+
 class Fragment(Item):
     def __init__(self):
         self.children: [Fragment] = []
@@ -72,7 +77,7 @@ class Fragment(Item):
             c.resolve_refs(defs)
 
     def render_plaintext(self) -> str:
-        return ''.join(c.render_plaintext() for c in self.children)
+        return ' '.join(c.render_plaintext() for c in self.children)
 
     def render_html(self) -> str:
         return ' '.join(c.render_html() for c in self.children)
@@ -117,7 +122,8 @@ class RefFragment(Fragment):
     def render_html(self) -> str:
         content = super().render_html()
         if isinstance(self.ref, ResolvedRef):
-            return '<a class="ref" href="{}.html">{}</a>'.format(self.ref.definition.id, content)
+            return '<a class="ref ref-{}" href="{}">{}</a>'.format(
+                self.ref.definition.kind(), self.ref.definition.href, content)
         return content
 
     def resolve_refs(self, defs: dict):
@@ -145,7 +151,9 @@ class SectionFragment(Fragment):
 
 def deserialize_fragment_children(instance: Fragment, node: xml.Element):
     if node.text:
-        instance.children.append(TextFragment(node.text))
+        node_text = node.text.strip()
+        if node_text:
+            instance.children.append(TextFragment(node_text))
 
     for child in node:
         fragment = None
@@ -175,9 +183,14 @@ def deserialize_fragment_children(instance: Fragment, node: xml.Element):
             instance.children.append(fragment)
 
         if child.tail:
-            instance.children.append(TextFragment(child.tail))
+            child_tail = child.tail.strip()
+            if child_tail:
+                instance.children.append(TextFragment(child_tail))
 
     return instance
+
+
+_SUPERFLUOUS_WHITESPACE_RE = re.compile(r'(^\s+)|(?<=[\s(])\s+|\s+(?=[.,)])|(\s+$)')
 
 
 class Markup(Item):
@@ -189,27 +202,19 @@ class Markup(Item):
         instance = cls()
         deserialize_fragment_children(instance.root, node)
         if node.tail:
-            instance.root.children.append(TextFragment(node.tail))
+            node_tail = node.tail.strip()
+            if node_tail:
+                instance.root.children.append(TextFragment(node_tail))
         return instance
 
     def resolve_refs(self, defs: dict):
         self.root.resolve_refs(defs)
 
+    def render_plaintext(self):
+        return _SUPERFLUOUS_WHITESPACE_RE.sub('', self.root.render_plaintext())
 
-class Listing(Item):
-    def __init__(self):
-        self.root = Fragment()
-
-    @classmethod
-    def deserialize(cls, node: xml.Element) -> 'Listing' or None:
-        instance = cls()
-        deserialize_fragment_children(instance.root, node)
-        if node.tail:
-            instance.root.children.append(TextFragment(node.tail))
-        return instance
-
-    def resolve_refs(self, defs: dict):
-        self.root.resolve_refs(defs)
+    def render_html(self):
+        return self.root.render_html()
 
 
 class Location:
@@ -293,19 +298,20 @@ class Def(Item):
         self.qualified_name: str or None = None
         self.name: str or None = None
         self.qualified_name: str or None = None
-        self.brief_text: Markup or None = None
-        self.detail_text: Markup or None = None
+        self.brief_description: Markup or None = None
+        self.detailed_description: Markup or None = None
         self.in_body_text: Markup or None = None
         self.location: Location or None = None
         self.visibility: Visibility or None = None
         self.attributes: [Attribute]
+        self.href = None
 
     def kind(self) -> str or None:
         raise NotImplementedError()
 
     def resolve_refs(self, defs: dict):
-        _maybe_resolve_refs(self.brief_text, defs)
-        _maybe_resolve_refs(self.detail_text, defs)
+        _maybe_resolve_refs(self.brief_description, defs)
+        _maybe_resolve_refs(self.detailed_description, defs)
         _maybe_resolve_refs(self.in_body_text, defs)
 
     @classmethod
@@ -320,16 +326,20 @@ class Def(Item):
         instance.attributes = deserialize_attributes(root)
 
         for elem in root:
+            if _elem_empty(elem):
+                continue
+
             if elem.tag in ['name', 'compoundname']:
                 instance.qualified_name = _require_text(elem)
             elif elem.tag == 'briefdescription':
-                instance.brief_text = Markup.deserialize(elem)
+                instance.brief_description = Markup.deserialize(elem)
             elif elem.tag == 'detaileddescription':
-                instance.detail_text = Markup.deserialize(elem)
+                instance.detailed_description = Markup.deserialize(elem)
             elif elem.tag == 'inbodydescription':
                 instance.in_body_text = Markup.deserialize(elem)
             elif elem.tag == 'location':
                 instance.location = Location.deserialize(elem)
+
         return instance
 
     def __repr__(self):
@@ -341,6 +351,12 @@ class Def(Item):
         if self.qualified_name is not None:
             return repr + ' ' + self.qualified_name
         return repr
+
+    def signature_html(self):
+        return repr(self)
+
+    def signature_plaintext(self):
+        return repr(self)
 
 
 class Ref:
@@ -419,8 +435,17 @@ class MacroDef(Def):
                 for name in elem.findall('defname'):
                     instance.params.append(_require_text(name))
             elif elem.tag == 'initializer':
-                instance.substitution = Listing.deserialize(elem)
+                instance.substitution = Markup.deserialize(elem)
         return instance
+
+    def signature_html(self):
+        return '<span class="preprocessor">#define</span> ' \
+               '<a class="ref ref-macro" href="{}">{}</a>({})'.format(
+            self.href, self.name, ', '.join('<span class="param macro-param">{}</span>'.format(p)
+                                            for p in self.params))
+
+    def signature_plaintext(self):
+        return '#define {}({})'.format(self.name, ', '.join(p for p in self.params))
 
 
 class TypedefDef(Def):
@@ -442,17 +467,17 @@ class TypedefDef(Def):
         instance: cls = super().deserialize(root)
         for elem in root:
             if elem.tag == 'type':
-                instance.type = Listing.deserialize(elem)
+                instance.type = Markup.deserialize(elem)
             elif elem.tag == 'definition':
-                instance.definition = Listing.deserialize(elem)
+                instance.definition = Markup.deserialize(elem)
         return instance
 
 
 class Param(Item):
     def __init__(self):
         self.name: str or None = None
-        self.type: Listing or None = None
-        self.default: Listing or None = None
+        self.type: Markup or None = None
+        self.default: Markup or None = None
 
     def resolve_refs(self, defs: dict):
         _maybe_resolve_refs(self.type, defs)
@@ -465,15 +490,27 @@ class Param(Item):
         defname = None
         for elem in root:
             if elem.tag == 'type':
-                instance.type = Listing.deserialize(elem)
+                instance.type = Markup.deserialize(elem)
             elif elem.tag == 'declname':
                 declname = _maybe_text(elem)
             elif elem.tag == 'declname':
                 defname = _maybe_text(elem)
             elif elem.tag == 'defval':
-                instance.default = Listing.deserialize(elem)
+                instance.default = Markup.deserialize(elem)
         instance.name = declname if declname else defname
         return instance
+
+    def render_html(self):
+        html = ''
+        if self.type:
+            html += '<span class="type param-type">{}</span>'.format(self.type.render_html())
+        if self.type and self.name:
+            html += ' '
+        if self.name:
+            html += '<span class="param-name">{}</span>'.format(self.name)
+        if self.default:
+            html += ' = <span class="param-default">{}</span>'.format(self.default.render_html())
+        return html
 
 
 class FunctionDef(Def):
@@ -494,7 +531,7 @@ class FunctionDef(Def):
 
     def __init__(self):
         super().__init__()
-        self.return_type: Listing or None = None
+        self.return_type: Markup or None = None
         self.template_params: [Param] = []
         self.parameters: [Param] = []
         self.variant: FunctionDef.Variant or None = None
@@ -523,13 +560,35 @@ class FunctionDef(Def):
                     else:
                         instance.variant = FunctionDef.Variant.CONSTRUCTOR
                 else:
-                    instance.return_type = Listing.deserialize(elem)
+                    instance.return_type = Markup.deserialize(elem)
             elif elem.tag == 'templateparamlist':
                 for param in elem:
                     instance.template_params.append(Param.deserialize(param))
             elif elem.tag == 'param':
                 instance.parameters.append(Param.deserialize(elem))
         return instance
+
+    def signature_html(self):
+        html = ''
+        if self.template_params:
+            html += '<span class="template">template&lt;{}&gt;</span> '.format(
+                ', '.join(p.render_html() for p in self.template_params))
+        if self.return_type:
+            html += '<span class="type return-type">{}</span> '.format(
+                self.return_type.render_html())
+        html += '<a class="ref ref-function" href="{}">{}</a>({})'.format(
+            self.href, self.name, ', '.join(p.render_html() for p in self.parameters))
+        return html
+
+    def signature_plaintext(self):
+        text = ''
+        if self.return_type:
+            text += self.return_type.render_plaintext() + ' '
+        text += self.name
+        if self.template_params:
+            text += '<>'
+        text += '({})'.format(', '.join(p.type.render_plaintext() for p in self.parameters))
+        return text
 
 
 class VariableDef(Def):
@@ -551,9 +610,9 @@ class VariableDef(Def):
         instance: cls = super().deserialize(root)
         for elem in root:
             if elem.tag == 'type':
-                instance.return_type = Listing.deserialize(elem)
+                instance.return_type = Markup.deserialize(elem)
             if elem.tag == 'initializer':
-                instance.initializer = Listing.deserialize(elem)
+                instance.initializer = Markup.deserialize(elem)
         return instance
 
 
@@ -575,7 +634,7 @@ class PropertyDef(Def):
         instance: cls = super().deserialize(root)
         for elem in root:
             if elem.tag == 'type':
-                instance.return_type = Listing.deserialize(elem)
+                instance.return_type = Markup.deserialize(elem)
         return instance
 
 
@@ -596,7 +655,7 @@ class EnumValueDef(Def):
         instance: cls = super().deserialize(root)
         for elem in root:
             if elem.tag == 'initializer':
-                instance.initializer = Listing.deserialize(elem)
+                instance.initializer = Markup.deserialize(elem)
         return instance
 
 
@@ -608,7 +667,7 @@ class EnumDef(Def):
         self.values = []
 
     def kind(self) -> str or None:
-        return 'enum class' if self.strong else 'enum'
+        return 'enum'
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
@@ -624,7 +683,7 @@ class EnumDef(Def):
             instance.strong = _yesno_to_bool(strong)
         for elem in root:
             if elem.tag == 'type':
-                instance.underlying_type = Listing.deserialize(elem)
+                instance.underlying_type = Markup.deserialize(elem)
             if elem.tag == 'enumvalue':
                 instance.values.append(EnumValueDef.deserialize(elem))
         return instance
@@ -647,7 +706,7 @@ class FriendDef(Def):
         instance: cls = super().deserialize(root)
         for elem in root:
             if elem.tag == 'definition':
-                instance.definition = Listing.deserialize(elem)
+                instance.definition = Markup.deserialize(elem)
         return instance
 
 
@@ -882,6 +941,19 @@ def _unqualify_names(d: Def, prefix: str = ''):
                 _unqualify_names(m.definition, prefix)
 
 
+def _derive_brief_description(d: Def):
+    if d.brief_description is None and d.detailed_description is not None:
+        fragments = d.detailed_description.root.children
+        if fragments and isinstance(fragments[0], FormatFragment) \
+                and fragments[0].variant == FormatFragment.Variant.PARAGRAPH:
+            d.brief_description = Markup()
+            d.brief_description.root.children.append(fragments[0])
+
+
+def _generate_href(d: Def):
+    d.href = d.id + '.html'
+
+
 def load(files: [str]) -> [Def]:
     defs = []
     global file_name
@@ -895,5 +967,8 @@ def load(files: [str]) -> [Def]:
     for d in defs:
         if d.name is None:
             d.name = d.qualified_name
+    for d in defs:
+        _derive_brief_description(d)
+        _generate_href(d)
 
     return defs

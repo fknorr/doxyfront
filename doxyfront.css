@@ -1,0 +1,50 @@
+html {
+    font-family: 'Source Serif Pro', serif;
+    font-size: 12pt;
+}
+
+code, pre {
+    font-family: 'Sorce Code Pro', monospace;
+    font-size: 0.95em;
+}
+
+a {
+    text-decoration: none;
+}
+
+a .external {
+    color: blue;
+}
+
+.def, .ref {
+    font-family: 'Fira Sans', sans-serif;
+    font-weight: 600;
+}
+
+h1 {
+    font-weight: normal;
+    font-size: 20pt;
+}
+
+.template {
+    color: grey;
+    font-size: 0.8em;
+    font-weight: normal;
+}
+
+.template:after {
+    content: '\A';
+    white-space: pre;
+}
+
+.ref-function, .ref-signal, .ref-slot, .ref-constructor, .ref-destructor {
+    color: #9a6e31;
+}
+
+.ref-typedef, .ref-class, .ref-struct, .ref-union, .ref-interface, .ref-protocol, .ref-category {
+    color: #ad448e;
+}
+
+.ref-enum {
+    color: #508157;
+}

@@ -42,27 +42,37 @@ def category_key(d: source.Def) -> int:
     return category(d)[0]
 
 
-def render(title: str, definition: source.Def or None, members: [source.Def], file):
-    brief = None
+def render(title: str or None, definition: source.Def or None, members: [source.Def], file):
     details = None
     if definition is not None:
-        brief = definition.brief_text.root.render_html()
-        details = definition.detail_text.root.render_html()
+        if definition.detailed_description is not None:
+            details = definition.detailed_description.render_html()
 
     by_cat = defaultdict(list)
     for m in members:
         by_cat[category(m)].append({
             'id': m.id,
-            'name': m.name,
-            'kind': m.kind(),
-            'brief': m.brief_text.root.render_plaintext()
+            'name': m.id,
+            'signature': m.signature_html(),
+            'brief': m.brief_description.render_plaintext() if m.brief_description else ''
         })
+
+    if title is not None:
+        window_title = title
+        page_title = title
+    else:
+        window_title = definition.signature_plaintext()
+        page_title = '<span class="def">{}</span>'.format(definition.signature_html())
 
     member_cats = list(sorted((c.name.lower(), list(sorted(m, key=lambda m: m['name'].lower())))
                               for (_, c), m in by_cat.items()))
 
     global template
-    file.write(template.render(title=title, brief=brief, details=details, member_cats=member_cats))
+    file.write(template.render(window_title=window_title,
+                               page_title=page_title,
+                               details=details,
+                               member_cats=member_cats
+                               ))
 
 
 def doctree(defs: [source.Def], outdir: str):
@@ -84,7 +94,7 @@ def doctree(defs: [source.Def], outdir: str):
                     if not isinstance(d, source.FileDef):
                         non_global.add(m.definition)
         with open(os.path.join(outdir, d.id + '.html'), 'w') as f:
-            render('{} {}'.format(d.kind(), d.name), d, members, file=f)
+            render(None, d, members, file=f)
 
     roots = set(defs) - non_global
     with open(os.path.join(outdir, 'index.html'), 'w') as f:

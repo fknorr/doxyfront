@@ -2,13 +2,11 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>{{ title }}</title>
+    <title>{{ window_title }}</title>
+    <link rel="stylesheet" href="doxyfront.css"/>
 </head>
     <body>
-    <h1>{{ title }}</h1>
-    {% if brief %}
-        <div class="briefdescription">{{ brief|safe }}</div>
-    {% endif %}
+    <h1>{{ page_title|safe }}</h1>
     {% if details %}
         <div class="detaileddescription">{{ details|safe }}</div>
     {% endif %}
@@ -17,8 +15,7 @@
         <table>
         {% for m in members %}
             <tr>
-                <td>{{ m.kind }}</td>
-                <td><a href="{{ m.id }}.html">{{ m.name }}</a></td>
+                <td><span class="def">{{ m.signature|safe }}</span></td>
                 <td>{{ m.brief }}</td>
             </tr>
         {% endfor %}
