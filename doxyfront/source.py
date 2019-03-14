@@ -62,7 +62,13 @@ class Markup(Item):
     @classmethod
     def deserialize(cls, node: xml.Element) -> 'Markup' or None:
         instance = cls()
-        instance.text = node.text
+        instance.text = ''
+        if node.text:
+            instance.text = node.text
+        for child in node:
+            instance.text += ' ' + Markup.deserialize(child).text + ' '
+        if node.tail:
+            instance.text += node.tail
         return instance
 
 
@@ -73,7 +79,13 @@ class Listing(Item):
     @classmethod
     def deserialize(cls, node: xml.Element) -> 'Listing' or None:
         instance = cls()
-        instance.code = node.text
+        instance.code = ''
+        if node.text:
+            instance.code = node.text
+        for child in node:
+            instance.code += ' ' + Listing.deserialize(child).code + ' '
+        if node.tail:
+            instance.code += node.tail
         return instance
 
 
