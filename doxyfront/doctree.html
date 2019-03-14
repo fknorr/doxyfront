@@ -7,18 +7,22 @@
     <body>
     <h1>{{ title }}</h1>
     {% if brief %}
-        <p><strong>{{ brief }}</strong></p>
+        <div class="briefdescription">{{ brief|safe }}</div>
     {% endif %}
     {% if details %}
-        <p>{{ details }}</p>
+        <div class="detaileddescription">{{ details|safe }}</div>
     {% endif %}
     {% for cat, members in member_cats %}
         <h2>{{ cat }}s</h2>
-        <ul>
+        <table>
         {% for m in members %}
-            <li><a href="{{ m.id }}.html">{{ m.kind }} {{ m.name }}</a></li>
+            <tr>
+                <td>{{ m.kind }}</td>
+                <td><a href="{{ m.id }}.html">{{ m.name }}</a></td>
+                <td>{{ m.brief }}</td>
+            </tr>
         {% endfor %}
-        </ul>
+        </table>
     {% endfor %}
 </body>
 </html>

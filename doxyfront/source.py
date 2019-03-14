@@ -55,38 +55,161 @@ def _maybe_resolve_refs(item: Item or None, defs: dict):
         item.resolve_refs(defs)
 
 
+def _html_escape(s: str) -> str:
+    return s.replace('&', '&amp;') \
+        .replace('<', '&lt;') \
+        .replace('>', '&gt;') \
+        .replace('"', '&quot;') \
+        .replace("'", '&apos;')
+
+
+class Fragment(Item):
+    def __init__(self):
+        self.children: [Fragment] = []
+
+    def resolve_refs(self, defs: dict):
+        for c in self.children:
+            c.resolve_refs(defs)
+
+    def render_plaintext(self) -> str:
+        return ''.join(c.render_plaintext() for c in self.children)
+
+    def render_html(self) -> str:
+        return ' '.join(c.render_html() for c in self.children)
+
+
+class TextFragment(Fragment):
+    def __init__(self, text: str or None = None):
+        super().__init__()
+        self.text = text
+
+    def render_plaintext(self) -> str:
+        return self.text
+
+    def render_html(self) -> str:
+        return _html_escape(self.text)
+
+
+class FormatFragment(Fragment):
+    @unique
+    class Variant(Enum):
+        PARAGRAPH = 'p'
+        CODE = 'code'
+        STRONG = 'strong'
+        EMPHASIS = 'em'
+        ITEMIZE = 'ul'
+        ENUMERATE = 'ol'
+        ITEM = 'li'
+
+    def __init__(self, variant: Variant):
+        super().__init__()
+        self.variant = variant
+
+    def render_html(self) -> str:
+        return '<{0}>{1}</{0}>'.format(self.variant.value.lower(), super().render_html())
+
+
+class RefFragment(Fragment):
+    def __init__(self, ref: 'Ref' or None = None):
+        super().__init__()
+        self.ref = ref
+
+    def render_html(self) -> str:
+        content = super().render_html()
+        if isinstance(self.ref, ResolvedRef):
+            return '<a class="ref" href="{}.html">{}</a>'.format(self.ref.definition.id, content)
+        return content
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        self.ref = self.ref.resolve(defs)
+
+
+class LinkFragment(Fragment):
+    def __init__(self, url: str or None = None):
+        super().__init__()
+        self.url = url
+
+    def render_html(self) -> str:
+        return '<a class="external" href="{}">{}</a>'.format(self.url, super().render_html())
+
+
+class SectionFragment(Fragment):
+    def __init__(self, kind: str):
+        super().__init__()
+        self.kind = kind
+
+    def render_html(self) -> str:
+        return '<section><h3>{}</h3>{}</section>'.format(self.kind, super().render_html())
+
+
+def deserialize_fragment_children(instance: Fragment, node: xml.Element):
+    if node.text:
+        instance.children.append(TextFragment(node.text))
+
+    for child in node:
+        fragment = None
+        if child.tag == 'ref':
+            fragment = RefFragment(deserialize_ref(child))
+        elif child.tag == 'para':
+            fragment = FormatFragment(FormatFragment.Variant.PARAGRAPH)
+        elif child.tag == 'computeroutput':
+            fragment = FormatFragment(FormatFragment.Variant.CODE)
+        elif child.tag == 'emphasis':
+            fragment = FormatFragment(FormatFragment.Variant.EMPHASIS)
+        elif child.tag == 'bold':
+            fragment = FormatFragment(FormatFragment.Variant.STRONG)
+        elif child.tag == 'itemizedlist':
+            fragment = FormatFragment(FormatFragment.Variant.ITEMIZE)
+        elif child.tag == 'listitem':
+            fragment = FormatFragment(FormatFragment.Variant.ITEM)
+        elif child.tag == 'simplesect':
+            fragment = SectionFragment(_require_attr(child.attrib, 'kind'))
+        elif child.tag == 'ulink':
+            fragment = LinkFragment(_require_attr(child.attrib, 'url'))
+        else:
+            _warning('Unhandled markup fragment <{}>'.format(child.tag))
+
+        if fragment is not None:
+            deserialize_fragment_children(fragment, child)
+            instance.children.append(fragment)
+
+        if child.tail:
+            instance.children.append(TextFragment(child.tail))
+
+    return instance
+
+
 class Markup(Item):
     def __init__(self):
-        self.text = None
+        self.root = Fragment()
 
     @classmethod
     def deserialize(cls, node: xml.Element) -> 'Markup' or None:
         instance = cls()
-        instance.text = ''
-        if node.text:
-            instance.text = node.text
-        for child in node:
-            instance.text += ' ' + Markup.deserialize(child).text + ' '
+        deserialize_fragment_children(instance.root, node)
         if node.tail:
-            instance.text += node.tail
+            instance.root.children.append(TextFragment(node.tail))
         return instance
+
+    def resolve_refs(self, defs: dict):
+        self.root.resolve_refs(defs)
 
 
 class Listing(Item):
     def __init__(self):
-        self.code = None
+        self.root = Fragment()
 
     @classmethod
     def deserialize(cls, node: xml.Element) -> 'Listing' or None:
         instance = cls()
-        instance.code = ''
-        if node.text:
-            instance.code = node.text
-        for child in node:
-            instance.code += ' ' + Listing.deserialize(child).code + ' '
+        deserialize_fragment_children(instance.root, node)
         if node.tail:
-            instance.code += node.tail
+            instance.root.children.append(TextFragment(node.tail))
         return instance
+
+    def resolve_refs(self, defs: dict):
+        self.root.resolve_refs(defs)
 
 
 class Location:
@@ -359,6 +482,8 @@ class FunctionDef(Def):
         FUNCTION = 0
         SIGNAL = 1
         SLOT = 2
+        CONSTRUCTOR = 3
+        DESTRUCTOR = 4
 
         @classmethod
         def deserialize(cls, repr: str) -> 'Variant' or None:
@@ -391,7 +516,14 @@ class FunctionDef(Def):
         instance.variant = FunctionDef.Variant.deserialize(_require_attr(root.attrib, 'kind'))
         for elem in root:
             if elem.tag == 'type':
-                instance.return_type = Listing.deserialize(elem)
+                if instance.variant == FunctionDef.Variant.FUNCTION \
+                        and len(elem) == 0 and elem.text is None:
+                    if instance.qualified_name.startswith('~'):
+                        instance.variant = FunctionDef.Variant.DESTRUCTOR
+                    else:
+                        instance.variant = FunctionDef.Variant.CONSTRUCTOR
+                else:
+                    instance.return_type = Listing.deserialize(elem)
             elif elem.tag == 'templateparamlist':
                 for param in elem:
                     instance.template_params.append(Param.deserialize(param))

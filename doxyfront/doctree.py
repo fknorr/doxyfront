@@ -46,17 +46,23 @@ def render(title: str, definition: source.Def or None, members: [source.Def], fi
     brief = None
     details = None
     if definition is not None:
-        brief = definition.brief_text.text
-        details = definition.detail_text.text
+        brief = definition.brief_text.root.render_html()
+        details = definition.detail_text.root.render_html()
 
     by_cat = defaultdict(list)
     for m in members:
-        by_cat[category(m)].append({'id': m.id, 'name': m.name, 'kind': m.kind()})
+        by_cat[category(m)].append({
+            'id': m.id,
+            'name': m.name,
+            'kind': m.kind(),
+            'brief': m.brief_text.root.render_plaintext()
+        })
+
     member_cats = list(sorted((c.name.lower(), list(sorted(m, key=lambda m: m['name'].lower())))
                               for (_, c), m in by_cat.items()))
 
     global template
-    file.write(template.render(title=title, details=details, member_cats=member_cats))
+    file.write(template.render(title=title, brief=brief, details=details, member_cats=member_cats))
 
 
 def doctree(defs: [source.Def], outdir: str):
