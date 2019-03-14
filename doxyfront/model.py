@@ -157,6 +157,18 @@ class Attribute(Enum):
         return self.__class__.__name__ + '.' + self.name
 
 
+class SingleDef:
+    pass
+
+
+class SymbolDef:
+    pass
+
+
+class PathDef:
+    pass
+
+
 class Def(Item):
     def __init__(self):
         self.id: str or None = None
@@ -208,23 +220,36 @@ class Def(Item):
         return '<span class="ref">{}<a class="ref ref-{}" href="{}">{}</a></span>'.format(
             html, self.kind(), self.href, self.name)
 
-    def path_html(self):
+    def path_plaintext(self, short=False):
         file_parent = self.file_parent
-        html = ''
-        while file_parent is not None:
-            html = '<a class="ref ref-{}" href="{}">{}</a>/'.format(
-                file_parent.kind(), file_parent.href, file_parent.name) + html
+        text = self.name
+        while not short and file_parent is not None:
+            text = '{}/{}'.format(file_parent.name, text)
             file_parent = file_parent.file_parent
-        return '<span class="ref">{}<a class="ref ref-{}" href="{}">{}</a></span>'.format(
-            html, self.kind(), self.href, self.name)
+        return text
+
+    def path_html(self, short=False):
+        file_parent = self.file_parent
+        html = '<a class="ref ref-{}" href="{}">{}</a>'.format(self.kind(), self.href, self.name)
+        while not short and file_parent is not None:
+            html = '<a class="ref ref-{}" href="{}">{}</a>/{}'.format(
+                file_parent.kind(), file_parent.href, file_parent.name, html)
+            file_parent = file_parent.file_parent
+        return '<span class="ref">{}</span>'.format(html)
 
     def signature_html(self, context, fully_qualified=False):
-        return '{} {}'.format(self.kind(), self.qualified_name_html(
-            context if not fully_qualified else set()))
+        if isinstance(self, PathDef):
+            sig = self.path_html(short=not fully_qualified)
+        else:
+            sig = self.qualified_name_html(context if not fully_qualified else set())
+        return '{} {}'.format(self.kind(), sig)
 
     def signature_plaintext(self, context, fully_qualified=False):
-        return '{} {}'.format(self.kind(), self.qualified_name_plaintext(
-            context if not fully_qualified else set()))
+        if isinstance(self, PathDef):
+            sig = self.path_plaintext(short=not fully_qualified)
+        else:
+            sig = self.qualified_name_plaintext(context if not fully_qualified else set())
+        return '{} {}'.format(self.kind(), sig)
 
 
 class Ref:
@@ -265,11 +290,7 @@ class Include(Item):
             self.file = self.file.resolve(defs)
 
 
-class SingleDef:
-    pass
-
-
-class MacroDef(Def, SingleDef):
+class MacroDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
         self.params = []
@@ -292,7 +313,7 @@ class MacroDef(Def, SingleDef):
         return '#define {}({})'.format(self.name, ', '.join(p for p in self.params))
 
 
-class TypedefDef(Def, SingleDef):
+class TypedefDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
         self.type = None
@@ -331,7 +352,7 @@ class Param(Item):
         return html
 
 
-class FunctionDef(Def, SingleDef):
+class FunctionDef(Def, SingleDef, SymbolDef):
     @unique
     class Variant(Enum):
         FUNCTION = 0
@@ -381,7 +402,7 @@ class FunctionDef(Def, SingleDef):
         return text
 
 
-class VariableDef(Def, SingleDef):
+class VariableDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
         self.type = None
@@ -397,7 +418,7 @@ class VariableDef(Def, SingleDef):
 
 
 # stub
-class PropertyDef(Def, SingleDef):
+class PropertyDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
         self.type = None
@@ -410,7 +431,7 @@ class PropertyDef(Def, SingleDef):
         _maybe_resolve_refs(self.type, defs)
 
 
-class EnumValueDef(Def, SingleDef):
+class EnumValueDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
         self.initializer = None
@@ -423,7 +444,7 @@ class EnumValueDef(Def, SingleDef):
         _maybe_resolve_refs(self.initializer, defs)
 
 
-class EnumDef(Def, SingleDef):
+class EnumDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
         self.underlying_type = None
@@ -440,7 +461,7 @@ class EnumDef(Def, SingleDef):
             value.resolve_refs(defs)
 
 
-class FriendDef(Def, SingleDef):
+class FriendDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
         self.definition = None
@@ -453,7 +474,7 @@ class FriendDef(Def, SingleDef):
         _maybe_resolve_refs(self.definition, defs)
 
 
-class CompoundDef(Def, SingleDef):
+class CompoundDef(Def):
     def __init__(self):
         super().__init__()
         self.language: str or None = None
@@ -465,12 +486,12 @@ class CompoundDef(Def, SingleDef):
             self.members[i] = self.members[i].resolve(defs)
 
 
-class DirectoryDef(CompoundDef, SingleDef):
+class DirectoryDef(CompoundDef, SingleDef, PathDef):
     def kind(self) -> str or None:
         return 'directory'
 
 
-class FileDef(CompoundDef, SingleDef):
+class FileDef(CompoundDef, SingleDef, PathDef):
     def __init__(self):
         super().__init__()
         self.includes: [Include] = []
@@ -484,7 +505,7 @@ class FileDef(CompoundDef, SingleDef):
             include.resolve_refs(defs)
 
 
-class NamespaceDef(CompoundDef):
+class NamespaceDef(CompoundDef, SymbolDef):
     def kind(self) -> str or None:
         return 'namespace'
 
@@ -511,7 +532,7 @@ class Inheritance(Item):
             self.ref = self.ref.resolve(defs)
 
 
-class ClassDef(CompoundDef):
+class ClassDef(CompoundDef, SymbolDef, SingleDef):
     @unique
     class Variant(Enum):
         CLASS = 0

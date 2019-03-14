@@ -3,7 +3,7 @@ from enum import Enum
 import os
 import jinja2
 
-from . import source
+from .model import *
 
 
 class SymbolCategory(Enum):
@@ -19,18 +19,18 @@ class SymbolCategory(Enum):
 
 
 CATEGORIES = [
-    ([source.DirectoryDef], SymbolCategory.DIRECTORY),
-    ([source.FileDef], SymbolCategory.FILE),
-    ([source.NamespaceDef], SymbolCategory.NAMESPACE),
-    ([source.MacroDef], SymbolCategory.MACRO),
-    ([source.TypedefDef, source.ClassDef, source.EnumDef], SymbolCategory.TYPE),
-    ([source.FunctionDef], SymbolCategory.FUNCTION),
-    ([source.PropertyDef], SymbolCategory.PROPERTY),
-    ([source.VariableDef], SymbolCategory.VARIABLE),
+    ([DirectoryDef], SymbolCategory.DIRECTORY),
+    ([FileDef], SymbolCategory.FILE),
+    ([NamespaceDef], SymbolCategory.NAMESPACE),
+    ([MacroDef], SymbolCategory.MACRO),
+    ([TypedefDef, ClassDef, EnumDef], SymbolCategory.TYPE),
+    ([FunctionDef], SymbolCategory.FUNCTION),
+    ([PropertyDef], SymbolCategory.PROPERTY),
+    ([VariableDef], SymbolCategory.VARIABLE),
 ]
 
 
-def category(d: source.Def) -> (int, str):
+def category(d: Def) -> (int, str):
     for i, (classes, cat) in enumerate(CATEGORIES):
         for c in classes:
             if isinstance(d, c):
@@ -38,11 +38,11 @@ def category(d: source.Def) -> (int, str):
     return len(CATEGORIES), SymbolCategory.OTHER
 
 
-def category_key(d: source.Def) -> int:
+def category_key(d: Def) -> int:
     return category(d)[0]
 
 
-def render(title: str or None, definition: source.Def or None, members: [source.Def], file):
+def render(title: str or None, definition: Def or None, members: [Def], file):
     context = set()
     details = None
     include = None
@@ -53,7 +53,7 @@ def render(title: str or None, definition: source.Def or None, members: [source.
             scope = scope.scope_parent
         if definition.detailed_description is not None:
             details = definition.detailed_description.render_html(context)
-        if definition.file_parent is not None:
+        if isinstance(definition, SymbolDef) and definition.file_parent is not None:
             include = '#include &lt;{}&gt;'.format(definition.file_parent.path_html())
 
     by_cat = defaultdict(list)
@@ -85,7 +85,7 @@ def render(title: str or None, definition: source.Def or None, members: [source.
                                ))
 
 
-def doctree(defs: [source.Def], outdir: str):
+def doctree(defs: [Def], outdir: str):
     env = jinja2.Environment(
         loader=jinja2.PackageLoader('doxyfront', ''),
         autoescape=jinja2.select_autoescape(['html']),
@@ -97,15 +97,22 @@ def doctree(defs: [source.Def], outdir: str):
     non_global = set()
     for d in defs:
         members = []
-        if isinstance(d, source.CompoundDef):
+        if isinstance(d, CompoundDef):
             for m in d.members:
-                if isinstance(m, source.ResolvedRef):
+                if isinstance(m, ResolvedRef):
                     members.append(m.definition)
-                    if not isinstance(d, source.FileDef):
+                    if not isinstance(d, FileDef):
                         non_global.add(m.definition)
         with open(os.path.join(outdir, d.id + '.html'), 'w') as f:
             render(None, d, members, file=f)
 
     roots = set(defs) - non_global
+    symbol_roots = set(r for r in roots if isinstance(r, SymbolDef))
+    with open(os.path.join(outdir, 'symbol_index.html'), 'w') as f:
+        render('Symbol Index', None, symbol_roots, file=f)
+    file_roots = set(r for r in roots if isinstance(r, DirectoryDef)
+                  or isinstance(r, FileDef))
+    with open(os.path.join(outdir, 'file_index.html'), 'w') as f:
+        render('File Index', None, file_roots, file=f)
     with open(os.path.join(outdir, 'index.html'), 'w') as f:
-        render('Index', None, roots, file=f)
+        render('Index', None, roots - symbol_roots - file_roots, file=f)

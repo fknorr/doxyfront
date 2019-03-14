@@ -45,11 +45,6 @@ def _yesno_to_bool(yesno: str or None) -> bool or None:
     return None
 
 
-class Item:
-    def resolve_refs(self, defs: dict):
-        pass
-
-
 def _elem_empty(elem: xml.Element) -> bool:
     return len(elem.attrib) == 0 and len(elem) == 0 and (elem.text is None or not elem.text.strip())
 
@@ -359,28 +354,12 @@ def deserialize_file(root: xml.Element) -> (FileDef, [Def]):
     return file, defs
 
 
-class NamespaceDef(CompoundDef):
-    def kind(self) -> str or None:
-        return 'namespace'
-
-
 def deserialize_namespace(root: xml.Element) -> (NamespaceDef, [Def]):
     return deserialize_compound(NamespaceDef, root)
 
 
-class GroupDef(CompoundDef):
-    def kind(self) -> str or None:
-        return 'group'
-
-
 def deserialize_group(root: xml.Element) -> (GroupDef, [Def]):
     return deserialize_compound(GroupDef, root)
-
-
-# Stub
-class PageDef(CompoundDef):
-    def kind(self) -> str or None:
-        return 'page'
 
 
 def deserialize_page(root: xml.Element) -> (PageDef, [Def]):
