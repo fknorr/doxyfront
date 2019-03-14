@@ -44,9 +44,12 @@ def category_key(d: source.Def) -> int:
 
 def render(title: str or None, definition: source.Def or None, members: [source.Def], file):
     details = None
+    include = None
     if definition is not None:
         if definition.detailed_description is not None:
             details = definition.detailed_description.render_html()
+        if definition.file_parent is not None:
+            include = '#include &lt;{}&gt;'.format(definition.file_parent.path_html())
 
     by_cat = defaultdict(list)
     for m in members:
@@ -71,7 +74,8 @@ def render(title: str or None, definition: source.Def or None, members: [source.
     file.write(template.render(window_title=window_title,
                                page_title=page_title,
                                details=details,
-                               member_cats=member_cats
+                               member_cats=member_cats,
+                               include=include,
                                ))
 
 

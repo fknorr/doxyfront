@@ -65,7 +65,7 @@ def _html_escape(s: str) -> str:
 
 
 def _elem_empty(elem: xml.Element) -> bool:
-    return len(elem) == 0 and (elem.text is None or not elem.text.strip())
+    return len(elem.attrib) == 0 and len(elem) == 0 and (elem.text is None or not elem.text.strip())
 
 
 class Fragment(Item):
@@ -122,8 +122,7 @@ class RefFragment(Fragment):
     def render_html(self) -> str:
         content = super().render_html()
         if isinstance(self.ref, ResolvedRef):
-            return '<a class="ref ref-{}" href="{}">{}</a>'.format(
-                self.ref.definition.kind(), self.ref.definition.href, content)
+            return self.ref.definition.qualified_name_html()
         return content
 
     def resolve_refs(self, defs: dict):
@@ -295,7 +294,6 @@ def deserialize_attributes(node: xml.Element) -> set:
 class Def(Item):
     def __init__(self):
         self.id: str or None = None
-        self.qualified_name: str or None = None
         self.name: str or None = None
         self.qualified_name: str or None = None
         self.brief_description: Markup or None = None
@@ -304,7 +302,9 @@ class Def(Item):
         self.location: Location or None = None
         self.visibility: Visibility or None = None
         self.attributes: [Attribute]
-        self.href = None
+        self.href: str or None = None
+        self.file_parent: Def or None = None
+        self.scope_parent: Def or None = None
 
     def kind(self) -> str or None:
         raise NotImplementedError()
@@ -352,11 +352,39 @@ class Def(Item):
             return repr + ' ' + self.qualified_name
         return repr
 
+    def qualified_name_plaintext(self):
+        scope_parent = self.scope_parent
+        text = ''
+        while scope_parent is not None:
+            text = '::'.join((scope_parent.name, text))
+            scope_parent = scope_parent.scope_parent
+        return text + self.name
+
+    def qualified_name_html(self):
+        scope_parent = self.scope_parent
+        html = ''
+        while scope_parent is not None:
+            html = '<a class="ref ref-{}" href="{}">{}</a>::'.format(
+                scope_parent.kind(), scope_parent.href, scope_parent.name) + html
+            scope_parent = scope_parent.scope_parent
+        return '<span class="ref">{}<a class="ref ref-{}" href="{}">{}</a></span>'.format(
+            html, self.kind(), self.href, self.name)
+
+    def path_html(self):
+        file_parent = self.file_parent
+        html = ''
+        while file_parent is not None:
+            html = '<a class="ref ref-{}" href="{}">{}</a>/'.format(
+                file_parent.kind(), file_parent.href, file_parent.name) + html
+            file_parent = file_parent.file_parent
+        return '<span class="ref">{}<a class="ref ref-{}" href="{}">{}</a></span>'.format(
+            html, self.kind(), self.href, self.name)
+
     def signature_html(self):
-        return repr(self)
+        return '{} {}'.format(self.kind(), self.qualified_name_html())
 
     def signature_plaintext(self):
-        return repr(self)
+        return '{} {}'.format(self.kind(), self.qualified_name_plaintext())
 
 
 class Ref:
@@ -413,8 +441,19 @@ class Include(Item):
         instance.local = _yesno_to_bool(_require_attr(root.attrib, 'local'))
         return instance
 
+    def render_html(self):
+        if isinstance(self.file, ResolvedRef):
+            name = self.file.definition.name
+        else:
+            name = self.file.name
+        return '<span class="preprocessor">#include &lt;{}&gt;</span>'.format(name)
 
-class MacroDef(Def):
+
+class SingleDef:
+    pass
+
+
+class MacroDef(Def, SingleDef):
     def __init__(self):
         super().__init__()
         self.params = []
@@ -448,7 +487,7 @@ class MacroDef(Def):
         return '#define {}({})'.format(self.name, ', '.join(p for p in self.params))
 
 
-class TypedefDef(Def):
+class TypedefDef(Def, SingleDef):
     def __init__(self):
         super().__init__()
         self.type = None
@@ -513,7 +552,7 @@ class Param(Item):
         return html
 
 
-class FunctionDef(Def):
+class FunctionDef(Def, SingleDef):
     @unique
     class Variant(Enum):
         FUNCTION = 0
@@ -576,22 +615,22 @@ class FunctionDef(Def):
         if self.return_type:
             html += '<span class="type return-type">{}</span> '.format(
                 self.return_type.render_html())
-        html += '<a class="ref ref-function" href="{}">{}</a>({})'.format(
-            self.href, self.name, ', '.join(p.render_html() for p in self.parameters))
+        html += '{}({})'.format(self.qualified_name_html(),
+                                ', '.join(p.render_html() for p in self.parameters))
         return html
 
     def signature_plaintext(self):
         text = ''
         if self.return_type:
             text += self.return_type.render_plaintext() + ' '
-        text += self.name
+        text += self.qualified_name_plaintext()
         if self.template_params:
             text += '<>'
         text += '({})'.format(', '.join(p.type.render_plaintext() for p in self.parameters))
         return text
 
 
-class VariableDef(Def):
+class VariableDef(Def, SingleDef):
     def __init__(self):
         super().__init__()
         self.type = None
@@ -617,7 +656,7 @@ class VariableDef(Def):
 
 
 # stub
-class PropertyDef(Def):
+class PropertyDef(Def, SingleDef):
     def __init__(self):
         super().__init__()
         self.type = None
@@ -638,7 +677,7 @@ class PropertyDef(Def):
         return instance
 
 
-class EnumValueDef(Def):
+class EnumValueDef(Def, SingleDef):
     def __init__(self):
         super().__init__()
         self.initializer = None
@@ -659,7 +698,7 @@ class EnumValueDef(Def):
         return instance
 
 
-class EnumDef(Def):
+class EnumDef(Def, SingleDef):
     def __init__(self):
         super().__init__()
         self.underlying_type = None
@@ -689,7 +728,7 @@ class EnumDef(Def):
         return instance
 
 
-class FriendDef(Def):
+class FriendDef(Def, SingleDef):
     def __init__(self):
         super().__init__()
         self.definition = None
@@ -710,7 +749,7 @@ class FriendDef(Def):
         return instance
 
 
-class CompoundDef(Def):
+class CompoundDef(Def, SingleDef):
     def __init__(self):
         super().__init__()
         self.language: str or None = None
@@ -759,12 +798,12 @@ class CompoundDef(Def):
         return instance, defs
 
 
-class DirectoryDef(CompoundDef):
+class DirectoryDef(CompoundDef, SingleDef):
     def kind(self) -> str or None:
         return 'directory'
 
 
-class FileDef(CompoundDef):
+class FileDef(CompoundDef, SingleDef):
     def __init__(self):
         super().__init__()
         self.includes: [Include] = []
@@ -805,7 +844,7 @@ class PageDef(CompoundDef):
         return 'page'
 
 
-class CompoundSingleDef(CompoundDef):
+class CompoundSingleDef(CompoundDef, SingleDef):
     def __init__(self):
         super().__init__()
         self.include: Include or None = None
@@ -931,6 +970,18 @@ def _resolve_refs(def_list: [Def]):
         d.resolve_refs(defs)
 
 
+def _assign_parents(r: Def):
+    if isinstance(r, FileDef) or isinstance(r, DirectoryDef):
+        for m in r.members:
+            if isinstance(m, ResolvedRef):
+                if isinstance(m.definition, SingleDef):
+                    m.definition.file_parent = r
+    elif isinstance(r, NamespaceDef) or isinstance(r, ClassDef):
+        for m in r.members:
+            if isinstance(m, ResolvedRef):
+                m.definition.scope_parent = r
+
+
 def _unqualify_names(d: Def, prefix: str = ''):
     if prefix and d.qualified_name.startswith(prefix):
         d.name = d.qualified_name[len(prefix):]
@@ -960,13 +1011,18 @@ def load(files: [str]) -> [Def]:
     for file_name in files:
         with open(file_name, 'rb') as f:
             defs += _parse(f)
+
     _resolve_refs(defs)
+
+    for d in defs:
+        _assign_parents(d)
 
     for d in defs:
         _unqualify_names(d)
     for d in defs:
         if d.name is None:
             d.name = d.qualified_name
+
     for d in defs:
         _derive_brief_description(d)
         _generate_href(d)

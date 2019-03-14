@@ -45,6 +45,22 @@ h1 {
     color: #ad448e;
 }
 
+.ref-namespace, .ref-module, .ref-package {
+    color: #4d76ae;
+}
+
+.ref-directory, .ref-file {
+    color: #de5249;
+}
+
+.ref-variable {
+    color: #2c8093;
+}
+
 .ref-enum {
     color: #508157;
+}
+
+.ref-macro, .preprocessor {
+    color: #068000;
 }

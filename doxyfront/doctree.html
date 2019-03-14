@@ -7,6 +7,9 @@
 </head>
     <body>
     <h1>{{ page_title|safe }}</h1>
+    {% if include %}
+        <code>{{ include|safe }}</code>
+    {% endif %}
     {% if details %}
         <div class="detaileddescription">{{ details|safe }}</div>
     {% endif %}
