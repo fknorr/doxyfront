@@ -206,7 +206,7 @@ class Def(Item):
         scope_parent = self.scope_parent
         text = ''
         while scope_parent is not None and scope_parent not in context:
-            text = '<span class="scope">::</span>'.join((scope_parent.name, text))
+            text = '::'.join((scope_parent.name, text))
             scope_parent = scope_parent.scope_parent
         return text + self.name
 

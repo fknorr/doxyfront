@@ -69,7 +69,7 @@ def render(title: str or None, definition: Def or None, members: [Def], file):
         window_title = title
         page_title = title
     else:
-        window_title = definition.signature_plaintext(context)
+        window_title = definition.signature_plaintext(context, fully_qualified=True)
         page_title = '<span class="def">{}</span>'.format(
             definition.signature_html(context, fully_qualified=True))
 
