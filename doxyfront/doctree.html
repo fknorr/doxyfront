@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="generator" content="{{ generator }}">
     <title>{{ window_title }}</title>
     <link rel="stylesheet" href="doxyfront.css"/>
 </head>
@@ -32,7 +33,7 @@
 <nav>
     {% if scope_sibling_cats %}
     <h2>Siblings by scope:</h2>
-    {% for cat, siblings in scope_sibling_cats %}
+    {% for cat, siblings, overflow in scope_sibling_cats %}
     <h3>{{ cat }}</h3>
     <ul>
         {% for s in siblings %}
@@ -40,13 +41,16 @@
             {{ s.name_html|safe }}
         </li>
         {% endfor %}
+        {% if overflow > 0 %}
+        <li><a class="overflow" href="{{ scope_parent_href }}">&hellip;and {{ overflow }} more</a></li>
+        {% endif %}
     </ul>
     {% endfor %}
     {% endif %}
 
     {% if path_sibling_cats %}
     <h2>Siblings by path:</h2>
-    {% for cat, siblings in path_sibling_cats %}
+    {% for cat, siblings, overflow in path_sibling_cats %}
     <h3>{{ cat }}</h3>
     <ul>
         {% for s in siblings %}
@@ -54,6 +58,9 @@
             {{ s.name_html|safe }}
         </li>
         {% endfor %}
+        {% if overflow > 0 %}
+        <li><a class="overflow" href="{{ file_parent_href }}">&hellip;and {{ overflow }} more</a></li>
+        {% endif %}
     </ul>
     {% endfor %}
     {% endif %}

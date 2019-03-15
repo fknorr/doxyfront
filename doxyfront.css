@@ -99,6 +99,10 @@ a .external {
     color: blue;
 }
 
+a:hover {
+    opacity: 0.8;
+}
+
 .def, .ref {
     font-family: 'Fira Sans', sans-serif;
     font-weight: 600;
@@ -156,10 +160,18 @@ nav li.self, nav li.self .ref {
     color: #068000;
 }
 
+.ref-index {
+    color: grey;
+}
+
 .scope {
     letter-spacing: 0.1em;
 }
 
 .attrib {
+    color: grey;
+}
+
+.overflow {
     color: grey;
 }

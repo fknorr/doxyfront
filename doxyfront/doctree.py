@@ -1,10 +1,10 @@
-from collections import defaultdict
-from enum import Enum
-import os
-import jinja2
 import multiprocessing
-import re
+import os
+from collections import defaultdict
 
+import jinja2
+
+from .__init__ import __version__ as package_version
 from .model import *
 
 
@@ -57,13 +57,14 @@ def describe(d: Def, context: set) -> dict:
     }
 
 
-def sorted_categories(members_by_cat: dict) -> list:
-    return [s for _, s in sorted((i, (c.name.title(),
+def sorted_categories(members_by_cat: dict) -> (list, int):
+    all_cats = sorted((i, (c.name.title(),
             list(sorted(m, key=lambda m: m['full_name_plaintext'].lower()))))
-            for (i, c), m in members_by_cat.items())]
+            for (i, c), m in members_by_cat.items())
+    return [cat for _, cat in all_cats]
 
 
-def sibling_cats(parent: Def, context: set, cache: dict) -> list:
+def sibling_cats(parent: Def, context: set, cache: dict) -> (list, int):
     try:
         return cache[parent.id]
     except KeyError:
@@ -73,7 +74,7 @@ def sibling_cats(parent: Def, context: set, cache: dict) -> list:
             if isinstance(ref, ResolvedRef):
                 m = ref.definition
                 by_cat[category(m)].append(describe(m, context))
-        cats = sorted_categories(by_cat)
+        cats = [(n, m[:30], max(0, len(m) - 30)) for n, m in sorted_categories(by_cat)]
         cache[parent.id] = cats
         return cats
 
@@ -82,7 +83,7 @@ scope_sibling_cache = dict()
 path_sibling_cache = dict()
 
 
-def prepare_render(title: str or None, definition: Def or None, members: [Def]) -> dict:
+def prepare_render(definition: Def) -> dict:
     context = set()
     details = None
     include = None
@@ -95,6 +96,10 @@ def prepare_render(title: str or None, definition: Def or None, members: [Def]) 
             details = definition.detailed_description.render_html(context)
         if isinstance(definition, SymbolDef) and definition.file_parent is not None:
             include = '#include &lt;{}&gt;'.format(definition.file_parent.path_html())
+
+    members = []
+    if isinstance(definition, CompoundDef):
+        members = [m.definition for m in definition.members if isinstance(m, ResolvedRef)]
 
     members_by_cat = defaultdict(list)
     for m in members:
@@ -110,16 +115,15 @@ def prepare_render(title: str or None, definition: Def or None, members: [Def]) 
         global path_sibling_cache
         path_sibling_cats = sibling_cats(definition.file_parent, context, path_sibling_cache)
 
-    if title is not None:
-        window_title = title
-        page_title = title
-    else:
-        window_title = definition.signature_plaintext(context, fully_qualified=True)
-        page_title = '<span class="def">{}</span>'.format(
-            definition.signature_html(context, fully_qualified=True))
+    window_title = definition.signature_plaintext(context, fully_qualified=True)
+    page_title = '<span class="def">{}</span>'.format(
+        definition.signature_html(context, fully_qualified=True))
 
     return {
+        'generator': '{} v{}'.format('doxyfront', package_version),
         'id': definition.id if definition else None,
+        'scope_parent_href': definition.scope_parent.href if definition.scope_parent else None,
+        'file_parent_href': definition.file_parent.href if definition.file_parent else None,
         'window_title': window_title,
         'page_title': page_title,
         'details': details,
@@ -154,13 +158,8 @@ def doctree(defs: [Def], outdir: str):
 
     render_jobs = []
     for d in defs:
-        members = []
-        if isinstance(d, CompoundDef):
-            for m in d.members:
-                if isinstance(m, ResolvedRef):
-                    members.append(m.definition)
         if d.page is not None:
-            script = prepare_render(None, d, members)
+            script = prepare_render(d)
             render_jobs.append((os.path.join(outdir, d.page), script))
 
     with multiprocessing.Pool() as pool:

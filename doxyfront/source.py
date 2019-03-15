@@ -491,7 +491,7 @@ def _generate_href(d: Def):
 def _renew_ids(defs: [Def]):
     used = set()
     for d in sorted(defs, key=lambda d: d.id):
-        slug = d.slug()[:40]
+        slug = d.slug()[:50]
         id = slug
         i = 0
         while id in used:
