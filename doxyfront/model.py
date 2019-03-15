@@ -512,57 +512,6 @@ class PropertyDef(Def, SingleDef, SymbolDef):
         return 'p-' + super().slug()
 
 
-class EnumValueDef(Def, SingleDef, SymbolDef):
-    def __init__(self):
-        super().__init__()
-        self.initializer = None
-
-    def kind(self) -> str or None:
-        return 'enum value'
-
-    def resolve_refs(self, defs: dict):
-        super().resolve_refs(defs)
-        _maybe_resolve_refs(self.initializer, defs)
-
-
-class EnumDef(Def, SingleDef, SymbolDef):
-    def __init__(self):
-        super().__init__()
-        self.underlying_type = None
-        self.strong = None
-        self.values = []
-
-    def kind(self) -> str or None:
-        return 'enum'
-
-    def resolve_refs(self, defs: dict):
-        super().resolve_refs(defs)
-        _maybe_resolve_refs(self.underlying_type, defs)
-        for value in self.values:
-            value.resolve_refs(defs)
-
-    def signature_html(self, context, fully_qualified=False):
-        html = ''
-        html += '{} {}'.format(
-            'enum class' if self.strong else 'enum',
-            self.qualified_name_html(context if not fully_qualified else set()))
-        if self.underlying_type is not None:
-            html += ': {}'.format(self.underlying_type.render_html(context))
-        return html
-
-    def signature_plaintext(self, context, fully_qualified=False):
-        text = ''
-        text += '{} {}'.format(
-            'enum class' if self.strong else 'enum',
-            self.qualified_name_plaintext(context if not fully_qualified else set()))
-        if self.underlying_type is not None:
-            text += ': {}'.format(self.underlying_type.render_plaintext(context))
-        return text
-
-    def slug(self):
-        return 'en-' + super().slug()
-
-
 class FriendDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
@@ -589,6 +538,67 @@ class CompoundDef(Def):
         super().resolve_refs(defs)
         for i in range(len(self.members)):
             self.members[i] = self.members[i].resolve(defs)
+
+
+class EnumVariantDef(Def, SingleDef, SymbolDef):
+    def __init__(self):
+        super().__init__()
+        self.initializer = None
+
+    def kind(self) -> str or None:
+        return 'enum-variant'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        _maybe_resolve_refs(self.initializer, defs)
+
+    def slug(self):
+        return 'ev-' + super().slug()
+
+    def signature_html(self, context, fully_qualified=False):
+        html = self.qualified_name_html(context if not fully_qualified else set())
+        if self.initializer is not None:
+            html = '{} {}'.format(html, self.initializer.render_html(context))
+        return html
+
+    def signature_plaintext(self, context, fully_qualified=False):
+        text = self.qualified_name_plaintext(context if not fully_qualified else set())
+        if self.initializer is not None:
+            text = '{} {}'.format(text, self.initializer.render_plaintext(context))
+        return text
+
+
+class EnumDef(CompoundDef, SingleDef, SymbolDef):
+    def __init__(self):
+        super().__init__()
+        self.underlying_type = None
+        self.strong = None
+
+    def kind(self) -> str or None:
+        return 'enum'
+
+    def resolve_refs(self, defs: dict):
+        super().resolve_refs(defs)
+        _maybe_resolve_refs(self.underlying_type, defs)
+
+    def signature_html(self, context, fully_qualified=False):
+        html = '{} {}'.format(
+            'enum class' if self.strong else 'enum',
+            self.qualified_name_html(context if not fully_qualified else set()))
+        if self.underlying_type is not None:
+            html += ': {}'.format(self.underlying_type.render_html(context))
+        return html
+
+    def signature_plaintext(self, context, fully_qualified=False):
+        text = '{} {}'.format(
+            'enum class' if self.strong else 'enum',
+            self.qualified_name_plaintext(context if not fully_qualified else set()))
+        if self.underlying_type is not None:
+            text += ': {}'.format(self.underlying_type.render_plaintext(context))
+        return text
+
+    def slug(self):
+        return 'e-' + super().slug()
 
 
 class DirectoryDef(CompoundDef, SingleDef, PathDef):

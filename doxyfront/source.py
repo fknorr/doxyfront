@@ -279,25 +279,29 @@ def deserialize_property(root: xml.Element):
     return instance
 
 
-def deserialize_enum_value(root: xml.Element):
-    instance: EnumValueDef = deserialize_def(EnumValueDef, root)
+def deserialize_enum_variant(root: xml.Element):
+    instance: EnumVariantDef = deserialize_def(EnumVariantDef, root)
     for elem in root:
         if elem.tag == 'initializer':
             instance.initializer = deserialize_markup(elem)
     return instance
 
 
-def deserialize_enum(root: xml.Element):
+def deserialize_enum(root: xml.Element) -> (EnumDef, [EnumVariantDef]):
     instance: EnumDef = deserialize_def(EnumDef, root)
+    variant_defs = []
     strong = _maybe_attr(root.attrib, 'strong')
     if strong:
         instance.strong = _yesno_to_bool(strong)
     for elem in root:
         if elem.tag == 'type':
-            instance.underlying_type = deserialize_markup(elem)
-        if elem.tag == 'enumvalue':
-            instance.values.append(deserialize_enum_value(elem))
-    return instance
+            if not _elem_empty(elem):
+                instance.underlying_type = deserialize_markup(elem)
+        elif elem.tag == 'enumvalue':
+            variant = deserialize_enum_variant(elem)
+            variant_defs.append(variant)
+            instance.members.append(ResolvedRef(variant))
+    return instance, variant_defs
 
 
 def deserialize_friend(root: xml.Element):
@@ -320,6 +324,7 @@ def deserialize_compound(cls, root: xml.Element) -> (CompoundDef, [Def]):
         elif elem.tag == 'sectiondef':
             for member in elem.findall('memberdef'):
                 child = None
+                nested_defs = []
 
                 if member.attrib['kind'] == 'define':
                     child = deserialize_macro_def(member)
@@ -332,7 +337,7 @@ def deserialize_compound(cls, root: xml.Element) -> (CompoundDef, [Def]):
                 elif member.attrib['kind'] == 'property':
                     child = deserialize_property(member)
                 elif member.attrib['kind'] == 'enum':
-                    child = deserialize_enum(member)
+                    child, nested_defs = deserialize_enum(member)
                 elif member.attrib['kind'] == 'friend':
                     child = deserialize_friend(member)
                 else:
@@ -341,6 +346,7 @@ def deserialize_compound(cls, root: xml.Element) -> (CompoundDef, [Def]):
                 if child is not None:
                     defs.append(child)
                     instance.members.append(SymbolicRef(child.id, child.qualified_name))
+                defs += nested_defs
 
     return instance, defs
 
@@ -444,7 +450,7 @@ def _assign_parents(r: Def):
             if isinstance(m, ResolvedRef):
                 if isinstance(m.definition, SingleDef):
                     m.definition.file_parent = r
-    elif isinstance(r, NamespaceDef) or isinstance(r, ClassDef):
+    elif isinstance(r, NamespaceDef) or isinstance(r, ClassDef) or isinstance(r, EnumDef):
         for m in r.members:
             if isinstance(m, ResolvedRef):
                 m.definition.scope_parent = r
@@ -479,8 +485,9 @@ def _derive_brief_description(d: Def):
 
 
 def _generate_href(d: Def):
-    if (isinstance(d, VariableDef) or isinstance(d, FunctionDef) or isinstance(d, TypedefDef)) \
-            and d.scope_parent is not None and isinstance(d.scope_parent, ClassDef):
+    if ((isinstance(d, VariableDef) or isinstance(d, FunctionDef) or isinstance(d, TypedefDef))
+            and d.scope_parent is not None and isinstance(d.scope_parent, ClassDef)) \
+            or isinstance(d, EnumVariantDef):
         d.page = None
         d.href = '{}.html#{}'.format(d.scope_parent.id, d.id)
     else:

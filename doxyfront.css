@@ -152,7 +152,7 @@ nav li.self, nav li.self .ref {
     color: #2c8093;
 }
 
-.ref-enum {
+.ref-enum, .ref-enum-variant {
     color: #508157;
 }
 
@@ -160,7 +160,7 @@ nav li.self, nav li.self .ref {
     color: #068000;
 }
 
-.ref-index {
+.ref-index, .ref-friend, .ref-group, .ref-page {
     color: grey;
 }
 

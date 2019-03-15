@@ -17,7 +17,8 @@ class SymbolCategory(Enum):
     FUNCTION = 5
     PROPERTY = 6
     VARIABLE = 7
-    OTHER = 8
+    VARIANT = 8
+    OTHER = 9
 
 
 CATEGORIES = [
@@ -26,6 +27,7 @@ CATEGORIES = [
     ([NamespaceDef], SymbolCategory.NAMESPACE),
     ([MacroDef], SymbolCategory.MACRO),
     ([TypedefDef, ClassDef, EnumDef], SymbolCategory.TYPE),
+    ([EnumVariantDef], SymbolCategory.VARIANT),
     ([FunctionDef], SymbolCategory.FUNCTION),
     ([PropertyDef], SymbolCategory.PROPERTY),
     ([VariableDef], SymbolCategory.VARIABLE),
