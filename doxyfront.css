@@ -84,6 +84,15 @@ code, pre, .vis {
     font-size: 0.9em;
 }
 
+.vis {
+    cursor: default;
+    padding-right: 0.2em;
+}
+
+.def.with-vis > .template {
+    padding-left: 1.2em;
+}
+
 code {
     background-color: #eee;
     padding: 0.08em 0.3em;
@@ -103,7 +112,7 @@ a:hover {
     opacity: 0.8;
 }
 
-.def, .ref {
+.ref {
     font-family: 'Fira Sans', sans-serif;
     font-weight: 600;
 }
@@ -122,14 +131,20 @@ nav li.self, nav li.self .ref {
 }
 
 .template {
+    display: block;
     color: grey;
     font-size: 0.8em;
     font-weight: normal;
 }
 
-.template:after {
-    content: '\A';
-    white-space: pre;
+.sig {
+    display: block;
+    margin-left: 2em;
+    text-indent: -2em;
+}
+
+h1 .template {
+    font-size: 0.7em;
 }
 
 .ref-function, .ref-signal, .ref-slot, .ref-constructor, .ref-destructor {

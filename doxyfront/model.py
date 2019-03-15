@@ -280,7 +280,7 @@ class Def(Item):
             sig = self.path_html(short=not fully_qualified)
         else:
             sig = self.qualified_name_html(context if not fully_qualified else set())
-        return '{} {}'.format(self.kind(), sig)
+        return None, '{} {}'.format(self.kind(), sig)
 
     def signature_plaintext(self, context, fully_qualified=False):
         if isinstance(self, PathDef):
@@ -342,7 +342,7 @@ class MacroDef(Def, SingleDef, SymbolDef):
         _maybe_resolve_refs(self.substitution, defs)
 
     def signature_html(self, context, fully_qualified=False):
-        return '<span class="preprocessor">#define</span> ' \
+        return None, '<span class="preprocessor">#define</span> ' \
                '<a class="ref ref-macro" href="{}">{}</a>({})'.format(
             self.href, self.name, ', '.join('<span class="param macro-param">{}</span>'.format(p)
                                             for p in self.params))
@@ -372,18 +372,17 @@ class TypedefDef(Def, SingleDef, SymbolDef):
         _maybe_resolve_refs(self.definition, defs)
 
     def signature_html(self, context, fully_qualified=False):
-        html = ''
+        template_html = None
         if self.template_params:
-            html += '<span class="template">template&lt;{}&gt;</span> '.format(
+            template_html = 'template&lt;{}&gt; '.format(
                 ', '.join(p.render_html(context) for p in self.template_params))
-        html += 'using {} = {}'.format(
+        html = 'using {} = {}'.format(
             self.qualified_name_html(context if not fully_qualified else set()),
             self.type.render_html(context))
-        return html
+        return template_html, html
 
     def signature_plaintext(self, context, fully_qualified=False):
-        text = ''
-        text += 'using {} = {}'.format(
+        text = 'using {} = {}'.format(
             self.qualified_name_plaintext(context if not fully_qualified else set()),
             self.type.render_plaintext(context))
         if self.template_params:
@@ -446,19 +445,19 @@ class FunctionDef(Def, SingleDef, SymbolDef):
             param.resolve_refs(defs)
 
     def signature_html(self, context, fully_qualified=False):
-        html = ''
+        template_html = None
         if self.template_params:
-            html += '<span class="template">template&lt;{}&gt;</span> '.format(
+            template_html = 'template&lt;{}&gt; '.format(
                 ', '.join(p.render_html(context) for p in self.template_params))
         attr_before, attr_after = cpp_order_attributes(self.attributes)
-        html += ''.join('{} '.format(a.render_html()) for a in attr_before)
+        html = ''.join('{} '.format(a.render_html()) for a in attr_before)
         if self.return_type:
             html += '<span class="type return-type">{}</span> '.format(
                 self.return_type.render_html(context))
         html += '{}({})'.format(self.qualified_name_html(context if not fully_qualified else set()),
                                 ', '.join(p.render_html(context) for p in self.parameters))
         html += ''.join(' {}'.format(a.render_html()) for a in attr_after)
-        return html
+        return template_html, html
 
     def signature_plaintext(self, context, fully_qualified=False):
         text = ''
@@ -559,7 +558,7 @@ class EnumVariantDef(Def, SingleDef, SymbolDef):
         html = self.qualified_name_html(context if not fully_qualified else set())
         if self.initializer is not None:
             html = '{} {}'.format(html, self.initializer.render_html(context))
-        return html
+        return None, html
 
     def signature_plaintext(self, context, fully_qualified=False):
         text = self.qualified_name_plaintext(context if not fully_qualified else set())
@@ -587,7 +586,7 @@ class EnumDef(CompoundDef, SingleDef, SymbolDef):
             self.qualified_name_html(context if not fully_qualified else set()))
         if self.underlying_type is not None:
             html += ': {}'.format(self.underlying_type.render_html(context))
-        return html
+        return None, html
 
     def signature_plaintext(self, context, fully_qualified=False):
         text = '{} {}'.format(
@@ -689,16 +688,16 @@ class ClassDef(CompoundDef, SymbolDef, SingleDef):
             base.resolve_refs(defs)
 
     def signature_html(self, context, fully_qualified=False):
-        html = ''
+        template_html = None
         if self.template_params:
-            html += '<span class="template">template&lt;{}&gt;</span> '.format(
+            template_html = 'template&lt;{}&gt; '.format(
                 ', '.join(p.render_html(context) for p in self.template_params))
         attr_before, attr_after = cpp_order_attributes(self.attributes)
-        html += ''.join('{} '.format(a.render_html()) for a in attr_before)
+        html = ''.join('{} '.format(a.render_html()) for a in attr_before)
         html += '{} {}'.format(
             self.kind(), self.qualified_name_html(context if not fully_qualified else set()))
         html += ''.join(' {}'.format(a.render_html()) for a in attr_after)
-        return html
+        return template_html, html
 
     def signature_plaintext(self, context, fully_qualified=False):
         text = ''
@@ -722,7 +721,7 @@ class IndexDef(CompoundDef):
         self.name = name
 
     def signature_html(self, context, fully_qualified=False):
-        return self.qualified_name_html(context)
+        return None, self.qualified_name_html(context)
 
     def signature_plaintext(self, context, fully_qualified=False):
         return self.qualified_name_plaintext(context)

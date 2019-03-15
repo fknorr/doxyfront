@@ -9,7 +9,10 @@
 <body>
 <main>
     <div id="content">
-        <h1><a name="{{ id }}"></a>{{ page_title|safe }}</h1>
+        <h1><a name="{{ id }}"></a>
+            {% if template_sig %}<span class="template">{{ template_sig|safe }}</span>{% endif %}
+            <span class="sig">{{ signature|safe }}</span>
+        </h1>
         {% if include %}
         <span class="include">{{ include|safe }}</span>
         {% endif %}
@@ -17,52 +20,67 @@
         <div class="detaileddescription">{{ details|safe }}</div>
         {% endif %}
         {% for cat, members in member_cats %}
-        <h2>{{ cat }}s</h2>
-        <table>
-            {% for m in members %}
-            <tr>
-                <td><span class="vis">{{ m.vis }}</span></td>
-                <td><a name="{{ m.id }}" class="def"></a>{{ m.signature|safe }}</td>
-                <td>{{ m.brief }}</td>
-            </tr>
-            {% endfor %}
-        </table>
+        <section>
+            <h2>{{ cat }}s</h2>
+            <table>
+                {% for m in members %}
+                <tr>
+                    <td class="def{% if m.vis_symbol %} with-vis{% endif %}">
+                        {% if m.template_sig %}<span class="template">{{ m.template_sig|safe }}</span>{% endif %}
+                        <span class="sig">
+                        {% if m.vis_symbol %}<span class="vis vis-{{ m.vis_plaintext }}" title="{{ m.vis_plaintext }}">{{ m.vis_symbol }}</span>{% endif %}
+                        <a name="{{ m.id }}"></a>{{ m.signature|safe }}
+                        </span>
+                    </td>
+                    <td>{{ m.brief }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </section>
         {% endfor %}
     </div>
 </main>
 <nav>
     {% if scope_sibling_cats %}
-    <h2>Siblings by scope:</h2>
-    {% for cat, siblings, overflow in scope_sibling_cats %}
-    <h3>{{ cat }}</h3>
-    <ul>
-        {% for s in siblings %}
-        <li title="{{ s.full_signature_plaintext }}" {% if s.id== id %}class="self" {% endif %}>
-            {{ s.name_html|safe }}
-        </li>
+    <section>
+        <h2>Siblings by scope:</h2>
+        {% for cat, siblings, overflow in scope_sibling_cats %}
+        <h3>{{ cat }}</h3>
+        <ul>
+            {% for s in siblings %}
+            <li title="{{ s.full_signature_plaintext }}" class="{% if s.id== id %}self{% endif %}">
+                {{ s.name_html|safe }}
+            </li>
+            {% endfor %}
+            {% if overflow > 0 %}
+            <li><a class="overflow" href="{{ scope_parent_href }}">&hellip;and {{ overflow }}
+                more</a>
+            </li>
+            {% endif %}
+        </ul>
         {% endfor %}
-        {% if overflow > 0 %}
-        <li><a class="overflow" href="{{ scope_parent_href }}">&hellip;and {{ overflow }} more</a></li>
-        {% endif %}
-    </ul>
-    {% endfor %}
+    </section>
     {% endif %}
 
     {% if path_sibling_cats %}
-    <h2>Siblings by path:</h2>
-    {% for cat, siblings, overflow in path_sibling_cats %}
-    <h3>{{ cat }}</h3>
-    <ul>
-        {% for s in siblings %}
-        <li title="{{ s.full_signature_plaintext }}" {% if s.id== id %}class="self" {% endif %}>
-            {{ s.name_html|safe }}
-        </li>
+    <section>
+        <h2>Siblings by path:</h2>
+        {% for cat, siblings, overflow in path_sibling_cats %}
+        <h3>{{ cat }}</h3>
+        <ul>
+            {% for s in siblings %}
+            <li title="{{ s.full_signature_plaintext }}" class="{% if s.id== id %}self{% endif %}">
+                {{ s.name_html|safe }}
+            </li>
+            {% endfor %}
+            {% if overflow > 0 %}
+            <li><a class="overflow" href="{{ file_parent_href }}">&hellip;and {{ overflow }}
+                more</a>
+            </li>
+            {% endif %}
+        </ul>
         {% endfor %}
-        {% if overflow > 0 %}
-        <li><a class="overflow" href="{{ file_parent_href }}">&hellip;and {{ overflow }} more</a></li>
-        {% endif %}
-    </ul>
-    {% endfor %}
+    </section>
     {% endif %}
 </nav>
 </body>

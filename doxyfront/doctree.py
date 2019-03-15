@@ -47,22 +47,33 @@ def category_key(d: Def) -> int:
 
 
 def describe(d: Def, context: set) -> dict:
+    template_sig, signature = d.signature_html(context)
+    vis = None
+    if d.scope_parent is not None and isinstance(d.scope_parent, ClassDef):
+        vis = d.visibility
+
     return {
         'id': d.id,
         'name_html': d.qualified_name_html(context),
         'full_name_plaintext': d.qualified_name_plaintext(set()),
         'full_signature_plaintext': d.signature_plaintext(set()),
-        'vis': d.visibility.value if d.visibility else '',
-        'signature': d.signature_html(context),
+        'vis_order': '+~#-'.index(vis.value) if vis else 0,
+        'vis_plaintext': vis.name.lower() if vis else None,
+        'vis_symbol': vis.value if vis else None,
+        'template_sig': template_sig,
+        'signature': signature,
         'brief': d.brief_description.render_plaintext(context) if d.brief_description else '',
         'href': d.href,
     }
 
 
+def member_order(member: Def):
+    return member['vis_order'], member['full_name_plaintext'].lower()
+
+
 def sorted_categories(members_by_cat: dict) -> (list, int):
-    all_cats = sorted((i, (c.name.title(),
-            list(sorted(m, key=lambda m: m['full_name_plaintext'].lower()))))
-            for (i, c), m in members_by_cat.items())
+    all_cats = sorted((i, (c.name.title(), list(sorted(m, key=member_order))))
+                       for (i, c), m in members_by_cat.items())
     return [cat for _, cat in all_cats]
 
 
@@ -118,8 +129,7 @@ def prepare_render(definition: Def) -> dict:
         path_sibling_cats = sibling_cats(definition.file_parent, context, path_sibling_cache)
 
     window_title = definition.signature_plaintext(context, fully_qualified=True)
-    page_title = '<span class="def">{}</span>'.format(
-        definition.signature_html(context, fully_qualified=True))
+    template_sig, signature = definition.signature_html(context, fully_qualified=True)
 
     return {
         'generator': '{} v{}'.format('doxyfront', package_version),
@@ -127,7 +137,8 @@ def prepare_render(definition: Def) -> dict:
         'scope_parent_href': definition.scope_parent.href if definition.scope_parent else None,
         'file_parent_href': definition.file_parent.href if definition.file_parent else None,
         'window_title': window_title,
-        'page_title': page_title,
+        'template_sig': template_sig,
+        'signature': signature,
         'details': details,
         'member_cats': sorted_categories(members_by_cat),
         'scope_sibling_cats': scope_sibling_cats,
