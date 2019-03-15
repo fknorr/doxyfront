@@ -6,6 +6,29 @@
     <link rel="stylesheet" href="doxyfront.css"/>
 </head>
 <body>
+<main>
+    <div id="content">
+        <h1>{{ page_title|safe }}</h1>
+        {% if include %}
+        <span class="include">{{ include|safe }}</span>
+        {% endif %}
+        {% if details %}
+        <div class="detaileddescription">{{ details|safe }}</div>
+        {% endif %}
+        {% for cat, members in member_cats %}
+        <h2>{{ cat }}s</h2>
+        <table>
+            {% for m in members %}
+            <tr>
+                <td><span class="vis">{{ m.vis }}</span></td>
+                <td><span class="def">{{ m.signature|safe }}</span></td>
+                <td>{{ m.brief }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endfor %}
+    </div>
+</main>
 <nav>
     {% if scope_sibling_cats %}
     <h2>Siblings by scope:</h2>
@@ -35,28 +58,5 @@
     {% endfor %}
     {% endif %}
 </nav>
-<main>
-    <div id="content">
-        <h1>{{ page_title|safe }}</h1>
-        {% if include %}
-        <span class="include">{{ include|safe }}</span>
-        {% endif %}
-        {% if details %}
-        <div class="detaileddescription">{{ details|safe }}</div>
-        {% endif %}
-        {% for cat, members in member_cats %}
-        <h2>{{ cat }}s</h2>
-        <table>
-            {% for m in members %}
-            <tr>
-                <td><span class="vis">{{ m.vis }}</span></td>
-                <td><span class="def">{{ m.signature|safe }}</span></td>
-                <td>{{ m.brief }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        {% endfor %}
-    </div>
-</main>
 </body>
 </html>

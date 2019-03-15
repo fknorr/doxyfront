@@ -57,9 +57,9 @@ def describe(d: Def, context: set) -> dict:
 
 
 def sorted_categories(members_by_cat: dict) -> list:
-    return list(sorted((c.name.lower(),
-                        list(sorted(m, key=lambda m: m['full_name_plaintext'].lower())))
-                       for (_, c), m in members_by_cat.items()))
+    return [s for _, s in sorted((i, (c.name.title(),
+            list(sorted(m, key=lambda m: m['full_name_plaintext'].lower()))))
+            for (i, c), m in members_by_cat.items())]
 
 
 def sibling_cats(parent: Def, context: set, cache: dict) -> list:

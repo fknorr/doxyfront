@@ -334,6 +334,7 @@ class MacroDef(Def, SingleDef, SymbolDef):
 class TypedefDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
+        self.template_params: [Param] = []
         self.type = None
         self.definition = None
 
@@ -342,8 +343,29 @@ class TypedefDef(Def, SingleDef, SymbolDef):
 
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
+        for param in self.template_params:
+            param.resolve_refs(defs)
         _maybe_resolve_refs(self.type, defs)
         _maybe_resolve_refs(self.definition, defs)
+
+    def signature_html(self, context, fully_qualified=False):
+        html = ''
+        if self.template_params:
+            html += '<span class="template">template&lt;{}&gt;</span> '.format(
+                ', '.join(p.render_html(context) for p in self.template_params))
+        html += 'using {} = {}'.format(
+            self.qualified_name_html(context if not fully_qualified else set()),
+            self.type.render_html(context))
+        return html
+
+    def signature_plaintext(self, context, fully_qualified=False):
+        text = ''
+        text += 'using {} = {}'.format(
+            self.qualified_name_plaintext(context if not fully_qualified else set()),
+            self.type.render_plaintext(context))
+        if self.template_params:
+            text += '<>'
+        return text
 
 
 class Param(Item):
@@ -484,6 +506,24 @@ class EnumDef(Def, SingleDef, SymbolDef):
         for value in self.values:
             value.resolve_refs(defs)
 
+    def signature_html(self, context, fully_qualified=False):
+        html = ''
+        html += '{} {}'.format(
+            'enum class' if self.strong else 'enum',
+            self.qualified_name_html(context if not fully_qualified else set()))
+        if self.underlying_type is not None:
+            html += ': {}'.format(self.underlying_type.render_html(context))
+        return html
+
+    def signature_plaintext(self, context, fully_qualified=False):
+        text = ''
+        text += '{} {}'.format(
+            'enum class' if self.strong else 'enum',
+            self.qualified_name_plaintext(context if not fully_qualified else set()))
+        if self.underlying_type is not None:
+            text += ': {}'.format(self.underlying_type.render_plaintext(context))
+        return text
+
 
 class FriendDef(Def, SingleDef, SymbolDef):
     def __init__(self):
@@ -582,3 +622,25 @@ class ClassDef(CompoundDef, SymbolDef, SingleDef):
         for base in self.bases:
             base.resolve_refs(defs)
 
+    def signature_html(self, context, fully_qualified=False):
+        html = ''
+        if self.template_params:
+            html += '<span class="template">template&lt;{}&gt;</span> '.format(
+                ', '.join(p.render_html(context) for p in self.template_params))
+        attr_before, attr_after = cpp_order_attributes(self.attributes)
+        html += ''.join('{} '.format(a.render_html()) for a in attr_before)
+        html += '{} {}'.format(
+            self.kind(), self.qualified_name_html(context if not fully_qualified else set()))
+        html += ''.join(' {}'.format(a.render_html()) for a in attr_after)
+        return html
+
+    def signature_plaintext(self, context, fully_qualified=False):
+        text = ''
+        attr_before, attr_after = cpp_order_attributes(self.attributes)
+        text += ''.join('{} '.format(a.render_plaintext()) for a in attr_before)
+        text += '{} {}'.format(
+            self.kind(), self.qualified_name_plaintext(context if not fully_qualified else set()))
+        if self.template_params:
+            text += '<>'
+        text += ''.join(' {}'.format(a.render_plaintext()) for a in attr_after)
+        return text

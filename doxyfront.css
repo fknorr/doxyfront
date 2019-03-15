@@ -13,7 +13,23 @@ h1, h2, h3, h4, h5, h6, h7 {
 }
 
 h1 {
-    font-size: 20pt;
+    font-size: 1.8em;
+}
+
+h2 {
+    font-size: 1.4em;
+}
+
+h3 {
+    font-size: 1.25em;
+}
+
+h4 {
+    font-size: 1.15em;
+}
+
+h5, h6, h7 {
+    font-size: 1.1em;
 }
 
 p {
