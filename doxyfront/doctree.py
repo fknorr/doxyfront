@@ -2,6 +2,7 @@ from collections import defaultdict
 from enum import Enum
 import os
 import jinja2
+import multiprocessing
 
 from .model import *
 
@@ -61,7 +62,26 @@ def sorted_categories(members_by_cat: dict) -> list:
                        for (_, c), m in members_by_cat.items()))
 
 
-def render(title: str or None, definition: Def or None, members: [Def], file):
+def sibling_cats(parent: Def, context: set, cache: dict) -> list:
+    try:
+        return cache[parent.id]
+    except KeyError:
+        by_cat = defaultdict(list)
+        assert isinstance(parent, CompoundDef)
+        for ref in parent.members:
+            if isinstance(ref, ResolvedRef):
+                m = ref.definition
+                by_cat[category(m)].append(describe(m, context))
+        cats = sorted_categories(by_cat)
+        cache[parent.id] = cats
+        return cats
+
+
+scope_sibling_cache = dict()
+path_sibling_cache = dict()
+
+
+def prepare_render(title: str or None, definition: Def or None, members: [Def]) -> dict:
     context = set()
     details = None
     include = None
@@ -79,21 +99,15 @@ def render(title: str or None, definition: Def or None, members: [Def], file):
     for m in members:
         members_by_cat[category(m)].append(describe(m, context))
 
-    scope_siblings_by_cat = defaultdict(list)
+    scope_sibling_cats = None
     if definition is not None and definition.scope_parent:
-        assert isinstance(definition.scope_parent, CompoundDef)
-        for ref in definition.scope_parent.members:
-            if isinstance(ref, ResolvedRef):
-                m = ref.definition
-                scope_siblings_by_cat[category(m)].append(describe(m, context))
+        global scope_sibling_cache
+        scope_sibling_cats = sibling_cats(definition.scope_parent, context, scope_sibling_cache)
 
-    path_siblings_by_cat = defaultdict(list)
+    path_sibling_cats = None
     if definition is not None and definition.file_parent:
-        assert isinstance(definition.file_parent, PathDef)
-        for ref in definition.file_parent.members:
-            if isinstance(ref, ResolvedRef):
-                m = ref.definition
-                path_siblings_by_cat[category(m)].append(describe(m, context))
+        global path_sibling_cache
+        path_sibling_cats = sibling_cats(definition.file_parent, context, path_sibling_cache)
 
     if title is not None:
         window_title = title
@@ -103,16 +117,26 @@ def render(title: str or None, definition: Def or None, members: [Def], file):
         page_title = '<span class="def">{}</span>'.format(
             definition.signature_html(context, fully_qualified=True))
 
-    global template
-    file.write(template.render(id=definition.id if definition else None,
-                               window_title=window_title,
-                               page_title=page_title,
-                               details=details,
-                               member_cats=sorted_categories(members_by_cat),
-                               scope_sibling_cats=sorted_categories(scope_siblings_by_cat),
-                               path_sibling_cats=sorted_categories(path_siblings_by_cat),
-                               include=include,
-                               ))
+    return {
+        'id': definition.id if definition else None,
+        'window_title': window_title,
+        'page_title': page_title,
+        'details': details,
+        'member_cats': sorted_categories(members_by_cat),
+        'scope_sibling_cats': scope_sibling_cats,
+        'path_sibling_cats': path_sibling_cats,
+        'include': include,
+    }
+
+
+def render(path: str, script: dict):
+    with open(path, 'w') as f:
+        global template
+        f.write(template.render(**script))
+
+
+def render_one(params):
+    render(*params)
 
 
 def doctree(defs: [Def], outdir: str):
@@ -124,6 +148,7 @@ def doctree(defs: [Def], outdir: str):
     global template
     template = env.get_template('doctree.html')
 
+    render_jobs = []
     non_global = set()
     for d in defs:
         members = []
@@ -133,16 +158,19 @@ def doctree(defs: [Def], outdir: str):
                     members.append(m.definition)
                     if not isinstance(d, FileDef):
                         non_global.add(m.definition)
-        with open(os.path.join(outdir, d.id + '.html'), 'w') as f:
-            render(None, d, members, file=f)
+        script = prepare_render(None, d, members)
+        render_jobs.append((os.path.join(outdir, d.id + '.html'), script))
+
+    with multiprocessing.Pool() as pool:
+        pool.map(render_one, render_jobs)
 
     roots = set(defs) - non_global
     symbol_roots = set(r for r in roots if isinstance(r, SymbolDef))
-    with open(os.path.join(outdir, 'symbol_index.html'), 'w') as f:
-        render('Symbol Index', None, symbol_roots, file=f)
+    render(os.path.join(outdir, 'symbol_index.html'),
+           prepare_render('Symbol Index', None, symbol_roots))
     file_roots = set(r for r in roots if isinstance(r, DirectoryDef)
                   or isinstance(r, FileDef))
-    with open(os.path.join(outdir, 'file_index.html'), 'w') as f:
-        render('File Index', None, file_roots, file=f)
-    with open(os.path.join(outdir, 'index.html'), 'w') as f:
-        render('Index', None, roots - symbol_roots - file_roots, file=f)
+    render(os.path.join(outdir, 'file_index.html'),
+           prepare_render('File Index', None, file_roots))
+    render(os.path.join(outdir, 'index.html'),
+           prepare_render('Index', None, roots - symbol_roots - file_roots))

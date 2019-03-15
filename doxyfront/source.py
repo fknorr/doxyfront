@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as xml
+import multiprocessing
 
 from .model import *
 
@@ -471,13 +472,18 @@ def _generate_href(d: Def):
     d.href = d.id + '.html'
 
 
-def load(files: [str]) -> [Def]:
-    defs = []
+def _parse_one(name: str) -> [Def]:
     global file_name
-    for file_name in files:
-        with open(file_name, 'rb') as f:
-            defs += _parse(f)
+    file_name = name
+    with open(name, 'rb') as f:
+        return _parse(f)
 
+
+def load(files: [str]) -> [Def]:
+    with multiprocessing.Pool() as pool:
+        def_slices = pool.map(_parse_one, files)
+
+    defs = [d for slice in def_slices for d in slice]
     _resolve_refs(defs)
 
     for d in defs:
