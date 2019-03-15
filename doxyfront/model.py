@@ -198,6 +198,7 @@ class Def(Item):
         self.location: Location or None = None
         self.visibility: Visibility or None = None
         self.attributes: [Attribute]
+        self.page: str or None = None
         self.href: str or None = None
         self.file_parent: Def or None = None
         self.scope_parent: Def or None = None

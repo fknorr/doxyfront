@@ -158,8 +158,9 @@ def doctree(defs: [Def], outdir: str):
                     members.append(m.definition)
                     if not isinstance(d, FileDef):
                         non_global.add(m.definition)
-        script = prepare_render(None, d, members)
-        render_jobs.append((os.path.join(outdir, d.id + '.html'), script))
+        if d.page is not None:
+            script = prepare_render(None, d, members)
+            render_jobs.append((os.path.join(outdir, d.page), script))
 
     with multiprocessing.Pool() as pool:
         pool.map(render_one, render_jobs)

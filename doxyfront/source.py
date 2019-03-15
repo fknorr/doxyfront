@@ -469,7 +469,13 @@ def _derive_brief_description(d: Def):
 
 
 def _generate_href(d: Def):
-    d.href = d.id + '.html'
+    if (isinstance(d, VariableDef) or isinstance(d, FunctionDef) or isinstance(d, TypedefDef)) \
+            and d.scope_parent is not None and isinstance(d.scope_parent, ClassDef):
+        d.page = None
+        d.href = '{}.html#{}'.format(d.scope_parent.id, d.id)
+    else:
+        d.page = '{}.html'.format(d.id)
+        d.href = d.page
 
 
 def _parse_one(name: str) -> [Def]:
