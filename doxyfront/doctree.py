@@ -42,6 +42,25 @@ def category_key(d: Def) -> int:
     return category(d)[0]
 
 
+def describe(d: Def, context: set) -> dict:
+    return {
+        'id': d.id,
+        'name_html': d.qualified_name_html(context),
+        'full_name_plaintext': d.qualified_name_plaintext(set()),
+        'full_signature_plaintext': d.signature_plaintext(set()),
+        'vis': d.visibility.value if d.visibility else '',
+        'signature': d.signature_html(context),
+        'brief': d.brief_description.render_plaintext(context) if d.brief_description else '',
+        'href': d.href,
+    }
+
+
+def sorted_categories(members_by_cat: dict) -> list:
+    return list(sorted((c.name.lower(),
+                        list(sorted(m, key=lambda m: m['full_name_plaintext'].lower())))
+                       for (_, c), m in members_by_cat.items()))
+
+
 def render(title: str or None, definition: Def or None, members: [Def], file):
     context = set()
     details = None
@@ -56,15 +75,25 @@ def render(title: str or None, definition: Def or None, members: [Def], file):
         if isinstance(definition, SymbolDef) and definition.file_parent is not None:
             include = '#include &lt;{}&gt;'.format(definition.file_parent.path_html())
 
-    by_cat = defaultdict(list)
+    members_by_cat = defaultdict(list)
     for m in members:
-        by_cat[category(m)].append({
-            'id': m.id,
-            'name': m.id,
-            'vis': m.visibility.value if m.visibility else '',
-            'signature': m.signature_html(context),
-            'brief': m.brief_description.render_plaintext(context) if m.brief_description else ''
-        })
+        members_by_cat[category(m)].append(describe(m, context))
+
+    scope_siblings_by_cat = defaultdict(list)
+    if definition is not None and definition.scope_parent:
+        assert isinstance(definition.scope_parent, CompoundDef)
+        for ref in definition.scope_parent.members:
+            if isinstance(ref, ResolvedRef):
+                m = ref.definition
+                scope_siblings_by_cat[category(m)].append(describe(m, context))
+
+    path_siblings_by_cat = defaultdict(list)
+    if definition is not None and definition.file_parent:
+        assert isinstance(definition.file_parent, PathDef)
+        for ref in definition.file_parent.members:
+            if isinstance(ref, ResolvedRef):
+                m = ref.definition
+                path_siblings_by_cat[category(m)].append(describe(m, context))
 
     if title is not None:
         window_title = title
@@ -74,14 +103,14 @@ def render(title: str or None, definition: Def or None, members: [Def], file):
         page_title = '<span class="def">{}</span>'.format(
             definition.signature_html(context, fully_qualified=True))
 
-    member_cats = list(sorted((c.name.lower(), list(sorted(m, key=lambda m: m['name'].lower())))
-                              for (_, c), m in by_cat.items()))
-
     global template
-    file.write(template.render(window_title=window_title,
+    file.write(template.render(id=definition.id if definition else None,
+                               window_title=window_title,
                                page_title=page_title,
                                details=details,
-                               member_cats=member_cats,
+                               member_cats=sorted_categories(members_by_cat),
+                               scope_sibling_cats=sorted_categories(scope_siblings_by_cat),
+                               path_sibling_cats=sorted_categories(path_siblings_by_cat),
                                include=include,
                                ))
 

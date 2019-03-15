@@ -5,25 +5,58 @@
     <title>{{ window_title }}</title>
     <link rel="stylesheet" href="doxyfront.css"/>
 </head>
-    <body>
-    <h1>{{ page_title|safe }}</h1>
-    {% if include %}
+<body>
+<nav>
+    {% if scope_sibling_cats %}
+    <h2>Siblings by scope:</h2>
+    {% for cat, siblings in scope_sibling_cats %}
+    <h3>{{ cat }}</h3>
+    <ul>
+        {% for s in siblings %}
+        <li title="{{ s.full_signature_plaintext }}" {% if s.id== id %}class="self" {% endif %}>
+            {{ s.name_html|safe }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endfor %}
+    {% endif %}
+
+    {% if path_sibling_cats %}
+    <h2>Siblings by path:</h2>
+    {% for cat, siblings in path_sibling_cats %}
+    <h3>{{ cat }}</h3>
+    <ul>
+        {% for s in siblings %}
+        <li title="{{ s.full_signature_plaintext }}" {% if s.id== id %}class="self" {% endif %}>
+            {{ s.name_html|safe }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endfor %}
+    {% endif %}
+</nav>
+<main>
+    <div id="content">
+        <h1>{{ page_title|safe }}</h1>
+        {% if include %}
         <span class="include">{{ include|safe }}</span>
-    {% endif %}
-    {% if details %}
+        {% endif %}
+        {% if details %}
         <div class="detaileddescription">{{ details|safe }}</div>
-    {% endif %}
-    {% for cat, members in member_cats %}
+        {% endif %}
+        {% for cat, members in member_cats %}
         <h2>{{ cat }}s</h2>
         <table>
-        {% for m in members %}
+            {% for m in members %}
             <tr>
                 <td><span class="vis">{{ m.vis }}</span></td>
                 <td><span class="def">{{ m.signature|safe }}</span></td>
                 <td>{{ m.brief }}</td>
             </tr>
-        {% endfor %}
+            {% endfor %}
         </table>
-    {% endfor %}
+        {% endfor %}
+    </div>
+</main>
 </body>
 </html>
