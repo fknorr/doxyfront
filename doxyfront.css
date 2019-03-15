@@ -36,6 +36,7 @@ p {
     font-family: 'Source Serif Pro', serif;
     font-size: 12pt;
     line-height: 1.3em;
+    text-align: justify;
 }
 
 nav {
@@ -75,7 +76,7 @@ main {
 }
 
 #content {
-    max-width: 1200px;
+    max-width: 1000px;
     padding-bottom: 20px;
 }
 

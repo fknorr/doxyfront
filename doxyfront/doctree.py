@@ -9,41 +9,55 @@ from .model import *
 
 
 class SymbolCategory(Enum):
-    DIRECTORY = 0
-    FILE = 1
-    NAMESPACE = 2
-    MACRO = 3
-    TYPE = 4
-    FUNCTION = 5
-    PROPERTY = 6
-    VARIABLE = 7
-    VARIANT = 8
-    OTHER = 9
+    PAGE = 0
+    DIRECTORY = 1
+    FILE = 2
+    NAMESPACE = 3
+    MACRO = 4
+    TYPE = 5
+    VARIANT = 6
+    CONSTRUCTOR = 7
+    DESTRUCTOR = 8
+    FUNCTION = 9
+    SIGNAL = 10
+    SLOT = 11
+    PROPERTY = 12
+    VARIABLE = 13
+    FRIEND = 14
 
 
-CATEGORIES = [
-    ([DirectoryDef], SymbolCategory.DIRECTORY),
-    ([FileDef], SymbolCategory.FILE),
-    ([NamespaceDef], SymbolCategory.NAMESPACE),
-    ([MacroDef], SymbolCategory.MACRO),
-    ([TypedefDef, ClassDef, EnumDef], SymbolCategory.TYPE),
-    ([EnumVariantDef], SymbolCategory.VARIANT),
-    ([FunctionDef], SymbolCategory.FUNCTION),
-    ([PropertyDef], SymbolCategory.PROPERTY),
-    ([VariableDef], SymbolCategory.VARIABLE),
-]
+KIND_CATEGORIES = {
+    'index': SymbolCategory.PAGE,
+    'page': SymbolCategory.PAGE,
+    'group': SymbolCategory.PAGE,
+    'directory': SymbolCategory.DIRECTORY,
+    'file': SymbolCategory.FUNCTION,
+    'namespace': SymbolCategory.NAMESPACE,
+    'package': SymbolCategory.NAMESPACE,
+    'macro': SymbolCategory.MACRO,
+    'typedef': SymbolCategory.TYPE,
+    'struct': SymbolCategory.TYPE,
+    'class': SymbolCategory.TYPE,
+    'union': SymbolCategory.TYPE,
+    'protocol': SymbolCategory.TYPE,
+    'category': SymbolCategory.TYPE,
+    'interface': SymbolCategory.TYPE,
+    'enum': SymbolCategory.TYPE,
+    'enum-class': SymbolCategory.TYPE,
+    'enum-variant': SymbolCategory.VARIANT,
+    'constructor': SymbolCategory.CONSTRUCTOR,
+    'destructor': SymbolCategory.DESTRUCTOR,
+    'property': SymbolCategory.PROPERTY,
+    'function': SymbolCategory.FUNCTION,
+    'signal': SymbolCategory.SIGNAL,
+    'slot': SymbolCategory.SLOT,
+    'variable': SymbolCategory.VARIABLE,
+    'friend': SymbolCategory.FRIEND,
+}
 
 
 def category(d: Def) -> (int, str):
-    for i, (classes, cat) in enumerate(CATEGORIES):
-        for c in classes:
-            if isinstance(d, c):
-                return i, cat
-    return len(CATEGORIES), SymbolCategory.OTHER
-
-
-def category_key(d: Def) -> int:
-    return category(d)[0]
+    return KIND_CATEGORIES[d.kind()]
 
 
 def describe(d: Def, context: set) -> dict:
@@ -72,8 +86,8 @@ def member_order(member: Def):
 
 
 def sorted_categories(members_by_cat: dict) -> (list, int):
-    all_cats = sorted((i, (c.name.title(), list(sorted(m, key=member_order))))
-                       for (i, c), m in members_by_cat.items())
+    all_cats = sorted((c.value, (c.name.title(), list(sorted(m, key=member_order))))
+                      for c, m in members_by_cat.items())
     return [cat for _, cat in all_cats]
 
 

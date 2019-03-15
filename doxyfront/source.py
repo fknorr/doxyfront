@@ -265,8 +265,8 @@ def deserialize_variable(root: xml.Element):
     instance: VariableDef = deserialize_def(VariableDef, root)
     for elem in root:
         if elem.tag == 'type':
-            instance.return_type = deserialize_markup(elem)
-        if elem.tag == 'initializer':
+            instance.type = deserialize_markup(elem)
+        elif elem.tag == 'initializer':
             instance.initializer = deserialize_markup(elem)
     return instance
 
@@ -309,6 +309,10 @@ def deserialize_friend(root: xml.Element):
     for elem in root:
         if elem.tag == 'definition':
             instance.definition = deserialize_markup(elem)
+        elif elem.tag == 'templateparamlist':
+            for param in elem:
+                instance.template_params.append(deserialize_param(param))
+    instance.visibility = None
     return instance
 
 

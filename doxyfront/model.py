@@ -490,6 +490,25 @@ class VariableDef(Def, SingleDef, SymbolDef):
         _maybe_resolve_refs(self.type, defs)
         _maybe_resolve_refs(self.initializer, defs)
 
+    def signature_html(self, context, fully_qualified=False):
+        attr_before, attr_after = cpp_order_attributes(self.attributes)
+        html = ''.join('{} '.format(a.render_html()) for a in attr_before)
+        if self.type:
+            html += '<span class="type var-type">{}</span> '.format(
+                self.type.render_html(context))
+        html += self.qualified_name_html(context if not fully_qualified else set())
+        html += ''.join(' {}'.format(a.render_html()) for a in attr_after)
+        return None, html
+
+    def signature_plaintext(self, context, fully_qualified=False):
+        attr_before, attr_after = cpp_order_attributes(self.attributes)
+        text = ''.join('{} '.format(a.render_plaintext()) for a in attr_before)
+        if self.type:
+            text += self.type.render_plaintext(context) + ' '
+        text += self.qualified_name_plaintext(context if not fully_qualified else set())
+        text += ''.join(' {}'.format(a.render_plaintext()) for a in attr_after)
+        return text
+
     def slug(self):
         return 'v-' + super().slug()
 
@@ -514,6 +533,7 @@ class PropertyDef(Def, SingleDef, SymbolDef):
 class FriendDef(Def, SingleDef, SymbolDef):
     def __init__(self):
         super().__init__()
+        self.template_params: [Param] = []
         self.definition = None
 
     def kind(self) -> str or None:
@@ -522,6 +542,17 @@ class FriendDef(Def, SingleDef, SymbolDef):
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
         _maybe_resolve_refs(self.definition, defs)
+
+    def signature_html(self, context, fully_qualified=False):
+        template_html = None
+        if self.template_params:
+            template_html = 'template&lt;{}&gt; '.format(
+                ', '.join(p.render_html(context) for p in self.template_params))
+        html = self.definition.render_html(context if not fully_qualified else set())
+        return template_html, html
+
+    def signature_plaintext(self, context, fully_qualified=False):
+        return self.definition.render_plaintext(context if not fully_qualified else set())
 
     def slug(self):
         return 'fr-' + super().slug()
