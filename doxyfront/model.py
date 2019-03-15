@@ -179,12 +179,29 @@ class SingleDef:
     pass
 
 
+_NON_SLUG_CHARS = re.compile('[^a-z-]+')
+
+
 class SymbolDef:
-    pass
+    def slug(self):
+        assert isinstance(self, Def)
+        slug = self.name.lower()
+        scope_parent = self.scope_parent
+        while scope_parent is not None and not isinstance(scope_parent, IndexDef):
+            slug = '{}-{}'.format(scope_parent.name.lower(), slug)
+            scope_parent = scope_parent.scope_parent
+        return _NON_SLUG_CHARS.sub('', slug)
 
 
 class PathDef:
-    pass
+    def slug(self):
+        assert isinstance(self, Def)
+        slug = self.name.lower()
+        file_parent = self.file_parent
+        while file_parent is not None and not isinstance(file_parent, IndexDef):
+            slug = '{}-{}'.format(self.file_parent.name.lower(), slug)
+            file_parent = file_parent.file_parent
+        return _NON_SLUG_CHARS.sub('', slug)
 
 
 class Def(Item):
@@ -224,7 +241,8 @@ class Def(Item):
     def qualified_name_plaintext(self, context: set):
         scope_parent = self.scope_parent
         text = ''
-        while scope_parent is not None and scope_parent not in context:
+        while scope_parent is not None and not isinstance(scope_parent, IndexDef) \
+                and scope_parent not in context:
             text = '::'.join((scope_parent.name, text))
             scope_parent = scope_parent.scope_parent
         return text + self.name
@@ -232,17 +250,18 @@ class Def(Item):
     def qualified_name_html(self, context: set):
         scope_parent = self.scope_parent
         html = ''
-        while scope_parent is not None and scope_parent not in context:
+        while scope_parent is not None and not isinstance(scope_parent, IndexDef) \
+                and scope_parent not in context:
             html = '<a class="ref ref-{}" href="{}">{}</a><span class="scope">::</span>'.format(
                 scope_parent.kind(), scope_parent.href, scope_parent.name) + html
             scope_parent = scope_parent.scope_parent
-        return '<span class="ref">{}<a class="ref ref-{}" href="{}">{}</a></span>'.format(
+        return '{}<a class="ref ref-{}" href="{}">{}</a>'.format(
             html, self.kind(), self.href, self.name)
 
     def path_plaintext(self, short=False):
         file_parent = self.file_parent
         text = self.name
-        while not short and file_parent is not None:
+        while not short and file_parent is not None and not isinstance(file_parent, IndexDef):
             text = '{}/{}'.format(file_parent.name, text)
             file_parent = file_parent.file_parent
         return text
@@ -250,11 +269,11 @@ class Def(Item):
     def path_html(self, short=False):
         file_parent = self.file_parent
         html = '<a class="ref ref-{}" href="{}">{}</a>'.format(self.kind(), self.href, self.name)
-        while not short and file_parent is not None:
+        while not short and file_parent is not None and not isinstance(file_parent, IndexDef):
             html = '<a class="ref ref-{}" href="{}">{}</a>/{}'.format(
                 file_parent.kind(), file_parent.href, file_parent.name, html)
             file_parent = file_parent.file_parent
-        return '<span class="ref">{}</span>'.format(html)
+        return html
 
     def signature_html(self, context, fully_qualified=False):
         if isinstance(self, PathDef):
@@ -331,6 +350,9 @@ class MacroDef(Def, SingleDef, SymbolDef):
     def signature_plaintext(self, context, fully_qualified=False):
         return '#define {}({})'.format(self.name, ', '.join(p for p in self.params))
 
+    def slug(self):
+        return 'm-' + super().slug()
+
 
 class TypedefDef(Def, SingleDef, SymbolDef):
     def __init__(self):
@@ -367,6 +389,9 @@ class TypedefDef(Def, SingleDef, SymbolDef):
         if self.template_params:
             text += '<>'
         return text
+
+    def slug(self):
+        return 't-' + super().slug()
 
 
 class Param(Item):
@@ -448,6 +473,9 @@ class FunctionDef(Def, SingleDef, SymbolDef):
         text += ''.join(' {}'.format(a.render_plaintext()) for a in attr_after)
         return text
 
+    def slug(self):
+        return 'fn-' + super().slug()
+
 
 class VariableDef(Def, SingleDef, SymbolDef):
     def __init__(self):
@@ -463,6 +491,9 @@ class VariableDef(Def, SingleDef, SymbolDef):
         _maybe_resolve_refs(self.type, defs)
         _maybe_resolve_refs(self.initializer, defs)
 
+    def slug(self):
+        return 'v-' + super().slug()
+
 
 # stub
 class PropertyDef(Def, SingleDef, SymbolDef):
@@ -476,6 +507,9 @@ class PropertyDef(Def, SingleDef, SymbolDef):
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
         _maybe_resolve_refs(self.type, defs)
+
+    def slug(self):
+        return 'p-' + super().slug()
 
 
 class EnumValueDef(Def, SingleDef, SymbolDef):
@@ -525,6 +559,9 @@ class EnumDef(Def, SingleDef, SymbolDef):
             text += ': {}'.format(self.underlying_type.render_plaintext(context))
         return text
 
+    def slug(self):
+        return 'en-' + super().slug()
+
 
 class FriendDef(Def, SingleDef, SymbolDef):
     def __init__(self):
@@ -537,6 +574,9 @@ class FriendDef(Def, SingleDef, SymbolDef):
     def resolve_refs(self, defs: dict):
         super().resolve_refs(defs)
         _maybe_resolve_refs(self.definition, defs)
+
+    def slug(self):
+        return 'fr-' + super().slug()
 
 
 class CompoundDef(Def):
@@ -555,6 +595,9 @@ class DirectoryDef(CompoundDef, SingleDef, PathDef):
     def kind(self) -> str or None:
         return 'directory'
 
+    def slug(self):
+        return 'dir-' + super().slug()
+
 
 class FileDef(CompoundDef, SingleDef, PathDef):
     def __init__(self):
@@ -569,21 +612,33 @@ class FileDef(CompoundDef, SingleDef, PathDef):
         for include in self.includes:
             include.resolve_refs(defs)
 
+    def slug(self):
+        return 'file-' + super().slug()
+
 
 class NamespaceDef(CompoundDef, SymbolDef):
     def kind(self) -> str or None:
         return 'namespace'
+
+    def slug(self):
+        return 'ns-' + super().slug()
 
 
 class GroupDef(CompoundDef):
     def kind(self) -> str or None:
         return 'group'
 
+    def slug(self):
+        return 'g-' + _NON_SLUG_CHARS.sub('', self.name.lower())
+
 
 # Stub
 class PageDef(CompoundDef):
     def kind(self) -> str or None:
         return 'page'
+
+    def slug(self):
+        return 'page-' + _NON_SLUG_CHARS.sub('', self.name.lower())
 
 
 class Inheritance(Item):
@@ -645,3 +700,25 @@ class ClassDef(CompoundDef, SymbolDef, SingleDef):
             text += '<>'
         text += ''.join(' {}'.format(a.render_plaintext()) for a in attr_after)
         return text
+
+    def slug(self):
+        return 'c-' + super().slug()
+
+
+class IndexDef(CompoundDef):
+    def __init__(self, id: str, name: str):
+        super().__init__()
+        self.id = id
+        self.name = name
+
+    def signature_html(self, context, fully_qualified=False):
+        return self.qualified_name_html(context)
+
+    def signature_plaintext(self, context, fully_qualified=False):
+        return self.qualified_name_plaintext(context)
+
+    def kind(self) -> str or None:
+        return 'index'
+
+    def slug(self):
+        return self.id

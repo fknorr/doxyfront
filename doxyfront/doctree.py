@@ -3,6 +3,7 @@ from enum import Enum
 import os
 import jinja2
 import multiprocessing
+import re
 
 from .model import *
 
@@ -129,10 +130,13 @@ def prepare_render(title: str or None, definition: Def or None, members: [Def]) 
     }
 
 
+_LEADING_WHITESPACE_RE = re.compile(r'^\s+', re.MULTILINE)
+
+
 def render(path: str, script: dict):
     with open(path, 'w') as f:
         global template
-        f.write(template.render(**script))
+        f.write(_LEADING_WHITESPACE_RE.sub('', template.render(**script)))
 
 
 def render_one(params):
@@ -149,29 +153,15 @@ def doctree(defs: [Def], outdir: str):
     template = env.get_template('doctree.html')
 
     render_jobs = []
-    non_global = set()
     for d in defs:
         members = []
         if isinstance(d, CompoundDef):
             for m in d.members:
                 if isinstance(m, ResolvedRef):
                     members.append(m.definition)
-                    if not isinstance(d, FileDef):
-                        non_global.add(m.definition)
         if d.page is not None:
             script = prepare_render(None, d, members)
             render_jobs.append((os.path.join(outdir, d.page), script))
 
     with multiprocessing.Pool() as pool:
         pool.map(render_one, render_jobs)
-
-    roots = set(defs) - non_global
-    symbol_roots = set(r for r in roots if isinstance(r, SymbolDef))
-    render(os.path.join(outdir, 'symbol_index.html'),
-           prepare_render('Symbol Index', None, symbol_roots))
-    file_roots = set(r for r in roots if isinstance(r, DirectoryDef)
-                  or isinstance(r, FileDef))
-    render(os.path.join(outdir, 'file_index.html'),
-           prepare_render('File Index', None, file_roots))
-    render(os.path.join(outdir, 'index.html'),
-           prepare_render('Index', None, roots - symbol_roots - file_roots))

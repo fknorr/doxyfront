@@ -8,7 +8,7 @@
 <body>
 <main>
     <div id="content">
-        <h1><a name="{{ id }}">{{ page_title|safe }}</h1>
+        <h1><a name="{{ id }}"></a>{{ page_title|safe }}</h1>
         {% if include %}
         <span class="include">{{ include|safe }}</span>
         {% endif %}
@@ -21,7 +21,7 @@
             {% for m in members %}
             <tr>
                 <td><span class="vis">{{ m.vis }}</span></td>
-                <td><a name="{{ m.id }}" class="def">{{ m.signature|safe }}</a></td>
+                <td><a name="{{ m.id }}" class="def"></a>{{ m.signature|safe }}</td>
                 <td>{{ m.brief }}</td>
             </tr>
             {% endfor %}

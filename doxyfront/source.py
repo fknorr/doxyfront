@@ -92,6 +92,7 @@ def deserialize_fragment_children(instance: Fragment, node: xml.Element):
 
 
 _SUPERFLUOUS_WHITESPACE_RE = re.compile(r'(^\s+)|(?<=[\s(])\s+|\s+(?=[.,)])|(\s+$)')
+_NON_URL_RE = re.compile(r'[^a-z0-9]+')
 
 
 def deserialize_markup(node: xml.Element) -> 'Markup' or None:
@@ -449,6 +450,15 @@ def _assign_parents(r: Def):
                 m.definition.scope_parent = r
 
 
+def _assign_roots(d: Def, scope_root: IndexDef, file_root: IndexDef):
+    if isinstance(d, SymbolDef) and d.scope_parent is None:
+        d.scope_parent = scope_root
+        scope_root.members.append(ResolvedRef(d))
+    if isinstance(d, PathDef) and d.file_parent is None:
+        d.file_parent = file_root
+        file_root.members.append(ResolvedRef(d))
+
+
 def _unqualify_names(d: Def, prefix: str = ''):
     if prefix and d.qualified_name.startswith(prefix):
         d.name = d.qualified_name[len(prefix):]
@@ -478,6 +488,19 @@ def _generate_href(d: Def):
         d.href = d.page
 
 
+def _renew_ids(defs: [Def]):
+    used = set()
+    for d in sorted(defs, key=lambda d: d.id):
+        slug = d.slug()[:40]
+        id = slug
+        i = 0
+        while id in used:
+            i += 1
+            id = '{}-{}'.format(slug, i)
+        d.id = id
+        used.add(id)
+
+
 def _parse_one(name: str) -> [Def]:
     global file_name
     file_name = name
@@ -500,6 +523,14 @@ def load(files: [str]) -> [Def]:
     for d in defs:
         if d.name is None:
             d.name = d.qualified_name
+
+    _renew_ids(defs)
+
+    scope_root = IndexDef('index', 'Global Namespace')
+    file_root = IndexDef('file_index', 'Root Folder')
+    for d in defs:
+        _assign_roots(d, scope_root, file_root)
+    defs += [scope_root, file_root]
 
     for d in defs:
         _derive_brief_description(d)
