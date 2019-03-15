@@ -134,10 +134,10 @@ class Location:
 
 @unique
 class Visibility(Enum):
-    PUBLIC = 0
-    PACKAGE = 1
-    PROTECTED = 2
-    PRIVATE = 3
+    PUBLIC = '+'
+    PACKAGE = '~'
+    PROTECTED = '#'
+    PRIVATE = '-'
 
 
 @unique
@@ -152,9 +152,27 @@ class Attribute(Enum):
     STATIC = 7
     MUTABLE = 8
     INLINE = 9
+    CONST = 10
 
     def __repr__(self):
         return self.__class__.__name__ + '.' + self.name
+
+    def render_plaintext(self):
+        if self == Attribute.ABSTRACT:
+            return "= 0"
+        return self.name.lower()
+
+    def render_html(self):
+        if self == Attribute.ABSTRACT:
+            return '<span class="attrib attrib-abstract">= 0</span>'
+        return '<span class="attrib attrib-{0}">{0}</span>'.format(self.name.lower())
+
+
+def cpp_order_attributes(attrs: [Attribute]) -> ([Attribute], [Attribute]):
+    may_before = [Attribute.STATIC, Attribute.VIRTUAL, Attribute.CONSTEXPR, Attribute.MUTABLE,
+                  Attribute.EXPLICIT]
+    may_after = [Attribute.CONST, Attribute.OVERRIDE, Attribute.FINAL, Attribute.ABSTRACT]
+    return [a for a in may_before if a in attrs], [a for a in may_after if a in attrs]
 
 
 class SingleDef:
@@ -384,21 +402,27 @@ class FunctionDef(Def, SingleDef, SymbolDef):
         if self.template_params:
             html += '<span class="template">template&lt;{}&gt;</span> '.format(
                 ', '.join(p.render_html(context) for p in self.template_params))
+        attr_before, attr_after = cpp_order_attributes(self.attributes)
+        html += ''.join('{} '.format(a.render_html()) for a in attr_before)
         if self.return_type:
             html += '<span class="type return-type">{}</span> '.format(
                 self.return_type.render_html(context))
         html += '{}({})'.format(self.qualified_name_html(context if not fully_qualified else set()),
                                 ', '.join(p.render_html(context) for p in self.parameters))
+        html += ''.join(' {}'.format(a.render_html()) for a in attr_after)
         return html
 
     def signature_plaintext(self, context, fully_qualified=False):
         text = ''
         if self.return_type:
             text += self.return_type.render_plaintext(context) + ' '
+        attr_before, attr_after = cpp_order_attributes(self.attributes)
+        text += ''.join('{} '.format(a.render_plaintext()) for a in attr_before)
         text += self.qualified_name_plaintext(context if not fully_qualified else set())
         if self.template_params:
             text += '<>'
         text += '({})'.format(', '.join(p.type.render_plaintext(context) for p in self.parameters))
+        text += ''.join(' {}'.format(a.render_plaintext()) for a in attr_after)
         return text
 
 

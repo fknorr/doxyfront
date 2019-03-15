@@ -3,9 +3,16 @@ html {
     font-size: 12pt;
 }
 
-code, pre {
+code, pre, .vis {
     font-family: 'Sorce Code Pro', monospace;
-    font-size: 0.95em;
+    font-size: 0.9em;
+}
+
+code {
+    background-color: #eee;
+    padding: 0.08em 0.3em;
+    border-radius: 0.2em;
+    color: #222;
 }
 
 a {
@@ -19,6 +26,11 @@ a .external {
 .def, .ref {
     font-family: 'Fira Sans', sans-serif;
     font-weight: 600;
+}
+
+code .ref, pre .ref {
+    font-family: 'Sorce Code Pro', monospace;
+    font-weight: normal;
 }
 
 h1 {
@@ -67,4 +79,8 @@ h1 {
 
 .scope {
     letter-spacing: 0.1em;
+}
+
+.attrib {
+    color: grey;
 }

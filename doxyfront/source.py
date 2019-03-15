@@ -137,8 +137,12 @@ def deserialize_attributes(node: xml.Element) -> set:
         except KeyError:
             pass
     try:
-        if node.attrib['virt'] == 'virtual':
+        virt = node.attrib['virt']
+        if virt == 'virtual':
             attrs.append(Attribute.VIRTUAL)
+        if virt == 'pure-virtual':
+            attrs.append(Attribute.VIRTUAL)
+            attrs.append(Attribute.ABSTRACT)
     except KeyError:
         pass
     return attrs

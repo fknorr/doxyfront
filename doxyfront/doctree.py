@@ -61,6 +61,7 @@ def render(title: str or None, definition: Def or None, members: [Def], file):
         by_cat[category(m)].append({
             'id': m.id,
             'name': m.id,
+            'vis': m.visibility.value if m.visibility else '',
             'signature': m.signature_html(context),
             'brief': m.brief_description.render_plaintext(context) if m.brief_description else ''
         })
