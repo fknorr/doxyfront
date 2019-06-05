@@ -1,6 +1,8 @@
 import multiprocessing
 import os
 from collections import defaultdict
+import shutil
+import pkg_resources
 
 import jinja2
 
@@ -174,9 +176,22 @@ def render_one(params):
     render(*params)
 
 
+def _extract_assets(manager, provider, src_resource, dest_folder):
+    os.makedirs(dest_folder, exist_ok=True)
+    for entry in provider.resource_listdir(src_resource):
+        entry_resource = '/'.join((src_resource, entry))
+        entry_folder = os.path.join(dest_folder, entry)
+        if provider.resource_isdir(entry_resource):
+            _extract_assets(manager, provider, entry_resource, entry_folder)
+        else:
+            with provider.get_resource_stream(manager, entry_resource) as source:
+                with open(entry_folder, 'wb') as dest:
+                    dest.write(source.read())
+
+
 def doctree(defs: [Def], outdir: str):
     env = jinja2.Environment(
-        loader=jinja2.PackageLoader('doxyfront', ''),
+        loader=jinja2.PackageLoader('doxyfront'),
         autoescape=jinja2.select_autoescape(['html']),
         trim_blocks=True,
     )
@@ -189,5 +204,10 @@ def doctree(defs: [Def], outdir: str):
             script = prepare_render(d)
             render_jobs.append((os.path.join(outdir, d.page), script))
 
+    os.makedirs(outdir, exist_ok=True)
     with multiprocessing.Pool() as pool:
         pool.map(render_one, render_jobs)
+
+    manager = pkg_resources.ResourceManager()
+    provider = pkg_resources.get_provider('doxyfront')
+    _extract_assets(manager, provider, 'assets', outdir)

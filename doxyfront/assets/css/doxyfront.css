@@ -1,6 +1,64 @@
+@font-face {
+    font-family:'Fira Sans';
+    font-style:normal;
+    font-weight:400;
+    src:local('Fira Sans'),
+    url("../fonts/FiraSans-Regular.woff") format('woff');
+}
+
+@font-face {
+    font-family:'Fira Sans';
+    font-style:normal;
+    font-weight:500;
+    src:local('Fira Sans Medium'),
+    url("../fonts/FiraSans-Medium.woff") format('woff');
+}
+
+@font-face {
+    font-family:'Source Serif Pro';
+    font-style:normal;
+    font-weight:400;
+    src:local('Source Serif Pro'),
+    url("../fonts/SourceSerifPro-Regular.ttf.woff") format('woff');
+}
+
+@font-face {
+    font-family:'Source Serif Pro';
+    font-style:italic;
+    font-weight:400;
+    src:local('Source Serif Pro Italic'),
+    url("../fonts/SourceSerifPro-It.ttf.woff") format('woff');
+}
+
+@font-face {
+    font-family:'Source Serif Pro';
+    font-style:normal;
+    font-weight:700;
+    src:local('Source Serif Pro Bold'),
+    url("../fonts/SourceSerifPro-Bold.ttf.woff") format('woff');
+}
+
+@font-face {
+    font-family:'Source Code Pro';
+    font-style:normal;
+    font-weight:400;
+    src:url("../fonts/SourceCodePro-Regular.woff") format('woff');
+}
+
+@font-face {
+    font-family:'Source Code Pro';
+    font-style:normal;
+    font-weight:600;
+    src:url("../fonts/SourceCodePro-Semibold.woff") format('woff');
+}
+
 html {
     font-family: 'Fira Sans', sans-serif;
     font-size: 12pt;
+
+    -webkit-font-feature-settings: 'kern', 'liga';
+    -moz-font-feature-settings: 'kern', 'liga';
+    font-feature-settings: 'kern', 'liga';
 }
 
 html, body {
@@ -9,33 +67,59 @@ html, body {
 }
 
 h1, h2, h3, h4, h5, h6, h7 {
-    font-weight: 600;
+    padding: 0;
+    font-weight: 500;
 }
 
 h1 {
     font-size: 1.8em;
+    margin: 1em 0 0.7em 0;
 }
 
 h2 {
     font-size: 1.4em;
+    margin: 0.8em 0 0.6em 0;
 }
 
 h3 {
     font-size: 1.25em;
+    margin: 0.7em 0 0.5em 0;
 }
 
 h4 {
     font-size: 1.15em;
+    margin: 0.6em 0 0.45em 0;
 }
 
 h5, h6, h7 {
     font-size: 1.1em;
+    margin: 0.5em 0 0.4em 0;
+}
+
+main h1, main h2, main h3 {
+    border-bottom: 1px solid #ddd;
+}
+
+main h1 {
+    padding-bottom: 0.3em;
+}
+
+main h2 {
+    padding-bottom: 0.2em;
+}
+
+main h3 {
+    padding-bottom: 0.16em;
+}
+
+main h4 {
+    padding-bottom: 0.14em;
 }
 
 p {
     font-family: 'Source Serif Pro', serif;
-    font-size: 12pt;
-    line-height: 1.3em;
+    font-size: 1rem;
+    line-height: 1.3rem;
     text-align: justify;
 }
 
@@ -115,7 +199,7 @@ a:hover {
 
 .ref {
     font-family: 'Fira Sans', sans-serif;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 code .ref, pre .ref {
@@ -128,7 +212,7 @@ nav .ref {
 }
 
 nav li.self, nav li.self .ref {
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .template {
