@@ -189,6 +189,17 @@ def _extract_assets(manager, provider, src_resource, dest_folder):
                     dest.write(source.read())
 
 
+def _generate_href(d: Def):
+    if ((isinstance(d, VariableDef) or isinstance(d, FunctionDef) or isinstance(d, TypedefDef))
+        and d.scope_parent is not None and isinstance(d.scope_parent, ClassDef)) \
+            or isinstance(d, EnumVariantDef):
+        d.page = None
+        d.href = '{}.html#{}'.format(d.scope_parent.id, d.id)
+    else:
+        d.page = '{}.html'.format(d.id)
+        d.href = d.page
+
+
 def doctree(defs: [Def], outdir: str):
     env = jinja2.Environment(
         loader=jinja2.PackageLoader('doxyfront'),
@@ -200,6 +211,7 @@ def doctree(defs: [Def], outdir: str):
 
     render_jobs = []
     for d in defs:
+        _generate_href(d)
         if d.page is not None:
             script = prepare_render(d)
             render_jobs.append((os.path.join(outdir, d.page), script))

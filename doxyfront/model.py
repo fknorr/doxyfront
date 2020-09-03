@@ -1,13 +1,10 @@
 from enum import Enum, unique
 import sys
 import re
+from typing import Dict, Optional
 
 
-file_name = None
-
-
-def _warning(msg: str):
-    global file_name
+def _warning(msg: str, file_name: str):
     print('{}: {}'.format(file_name, msg), file=sys.stderr)
 
 
@@ -16,7 +13,7 @@ class Item:
         pass
 
 
-def _maybe_resolve_refs(item: Item or None, defs: dict):
+def _maybe_resolve_refs(item: Optional[Item], defs: dict):
     if item is not None:
         item.resolve_refs(defs)
 
@@ -45,7 +42,7 @@ class Fragment(Item):
 
 
 class TextFragment(Fragment):
-    def __init__(self, text: str or None = None):
+    def __init__(self, text: Optional[str] = None):
         super().__init__()
         self.text = text
 
@@ -76,7 +73,7 @@ class FormatFragment(Fragment):
 
 
 class RefFragment(Fragment):
-    def __init__(self, ref: 'Ref' or None = None):
+    def __init__(self, ref: Optional['Ref'] = None):
         super().__init__()
         self.ref = ref
 
@@ -92,7 +89,7 @@ class RefFragment(Fragment):
 
 
 class LinkFragment(Fragment):
-    def __init__(self, url: str or None = None):
+    def __init__(self, url: Optional[str] = None):
         super().__init__()
         self.url = url
 
@@ -128,8 +125,8 @@ class Markup(Item):
 
 class Location:
     def __init__(self):
-        self.file: str or None = None
-        self.line: int or None = None
+        self.file: Optional[str] = None
+        self.line: Optional[int] = None
 
 
 @unique
@@ -206,21 +203,21 @@ class PathDef:
 
 class Def(Item):
     def __init__(self):
-        self.id: str or None = None
-        self.name: str or None = None
-        self.qualified_name: str or None = None
-        self.brief_description: Markup or None = None
-        self.detailed_description: Markup or None = None
-        self.in_body_text: Markup or None = None
-        self.location: Location or None = None
-        self.visibility: Visibility or None = None
+        self.id: Optional[str] = None
+        self.name: Optional[str] = None
+        self.qualified_name: Optional[str] = None
+        self.brief_description: Optional[Markup] = None
+        self.detailed_description: Optional[Markup] = None
+        self.in_body_text: Optional[Markup] = None
+        self.location: Optional[Location] = None
+        self.visibility: Optional[Visibility] = None
         self.attributes: [Attribute]
-        self.page: str or None = None
-        self.href: str or None = None
-        self.file_parent: Def or None = None
-        self.scope_parent: Def or None = None
+        self.page: Optional[str] = None
+        self.href: Optional[str] = None
+        self.file_parent: Optional[Def] = None
+        self.scope_parent: Optional[Def] = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         raise NotImplementedError()
 
     def resolve_refs(self, defs: dict):
@@ -291,16 +288,16 @@ class Def(Item):
 
 
 class Ref:
-    def resolve(self, defs: dict) -> 'Ref':
+    def resolve(self, defs: Dict[str, Def]) -> 'Ref':
         return self
 
 
 class SymbolicRef(Ref):
-    def __init__(self, id: str, name: str or None):
+    def __init__(self, id: str, name: Optional[str]):
         self.id = id
         self.name = name
 
-    def resolve(self, defs: dict) -> 'Ref':
+    def resolve(self, defs: Dict[str, Def]) -> 'Ref':
         try:
             return ResolvedRef(defs[self.id])
         except KeyError:
@@ -320,10 +317,10 @@ class ResolvedRef(Ref):
 
 class Include(Item):
     def __init__(self):
-        self.file: Ref or None = None
-        self.local: bool or None = None
+        self.file: Optional[Ref] = None
+        self.local: Optional[bool] = None
 
-    def resolve_refs(self, defs: dict):
+    def resolve_refs(self, defs: Dict[str, Def]):
         if self.file:
             self.file = self.file.resolve(defs)
 
@@ -334,7 +331,7 @@ class MacroDef(Def, SingleDef, SymbolDef):
         self.params = []
         self.substitution = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'macro'
 
     def resolve_refs(self, defs: dict):
@@ -361,7 +358,7 @@ class TypedefDef(Def, SingleDef, SymbolDef):
         self.type = None
         self.definition = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'typedef'
 
     def resolve_refs(self, defs: dict):
@@ -395,9 +392,9 @@ class TypedefDef(Def, SingleDef, SymbolDef):
 
 class Param(Item):
     def __init__(self):
-        self.name: str or None = None
-        self.type: Markup or None = None
-        self.default: Markup or None = None
+        self.name: Optional[str] = None
+        self.type: Optional[Markup] = None
+        self.default: Optional[Markup] = None
 
     def resolve_refs(self, defs: dict):
         _maybe_resolve_refs(self.type, defs)
@@ -428,12 +425,12 @@ class FunctionDef(Def, SingleDef, SymbolDef):
 
     def __init__(self):
         super().__init__()
-        self.return_type: Markup or None = None
+        self.return_type: Optional[Markup] = None
         self.template_params: [Param] = []
         self.parameters: [Param] = []
-        self.variant: FunctionDef.Variant or None = None
+        self.variant: Optional[FunctionDef.Variant] = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return self.variant.name.lower() if self.variant is not None else None
 
     def resolve_refs(self, defs: dict):
@@ -482,7 +479,7 @@ class VariableDef(Def, SingleDef, SymbolDef):
         self.type = None
         self.initializer = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'variable'
 
     def resolve_refs(self, defs: dict):
@@ -519,7 +516,7 @@ class PropertyDef(Def, SingleDef, SymbolDef):
         super().__init__()
         self.type = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'property'
 
     def resolve_refs(self, defs: dict):
@@ -536,7 +533,7 @@ class FriendDef(Def, SingleDef, SymbolDef):
         self.template_params: [Param] = []
         self.definition = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'friend'
 
     def resolve_refs(self, defs: dict):
@@ -561,7 +558,7 @@ class FriendDef(Def, SingleDef, SymbolDef):
 class CompoundDef(Def):
     def __init__(self):
         super().__init__()
-        self.language: str or None = None
+        self.language: Optional[str] = None
         self.members: [Ref] = []
 
     def resolve_refs(self, defs: dict):
@@ -575,7 +572,7 @@ class EnumVariantDef(Def, SingleDef, SymbolDef):
         super().__init__()
         self.initializer = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'enum-variant'
 
     def resolve_refs(self, defs: dict):
@@ -604,7 +601,7 @@ class EnumDef(CompoundDef, SingleDef, SymbolDef):
         self.underlying_type = None
         self.strong = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'enum'
 
     def resolve_refs(self, defs: dict):
@@ -632,7 +629,7 @@ class EnumDef(CompoundDef, SingleDef, SymbolDef):
 
 
 class DirectoryDef(CompoundDef, SingleDef, PathDef):
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'directory'
 
     def slug(self):
@@ -644,7 +641,7 @@ class FileDef(CompoundDef, SingleDef, PathDef):
         super().__init__()
         self.includes: [Include] = []
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'file'
 
     def resolve_refs(self, defs: dict):
@@ -657,7 +654,7 @@ class FileDef(CompoundDef, SingleDef, PathDef):
 
 
 class NamespaceDef(CompoundDef, SymbolDef):
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'namespace'
 
     def slug(self):
@@ -665,7 +662,7 @@ class NamespaceDef(CompoundDef, SymbolDef):
 
 
 class GroupDef(CompoundDef):
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'group'
 
     def slug(self):
@@ -674,7 +671,7 @@ class GroupDef(CompoundDef):
 
 # Stub
 class PageDef(CompoundDef):
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'page'
 
     def slug(self):
@@ -683,9 +680,9 @@ class PageDef(CompoundDef):
 
 class Inheritance(Item):
     def __init__(self):
-        self.ref: Ref or None = None
-        self.visibility: Visibility or None = None
-        self.virtual: bool or None = None
+        self.ref: Optional[Ref] = None
+        self.visibility: Optional[Visibility] = None
+        self.virtual: Optional[bool] = None
 
     def resolve_refs(self, defs: dict):
         if self.ref is not None:
@@ -706,9 +703,9 @@ class ClassDef(CompoundDef, SymbolDef, SingleDef):
         super().__init__()
         self.template_params: [Param] = []
         self.bases: [Inheritance] = []
-        self.variant: ClassDef.Variant or None = None
+        self.variant: Optional[ClassDef.Variant] = None
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return self.variant.name.lower() if self.variant is not None else None
 
     def resolve_refs(self, defs: dict):
@@ -757,7 +754,7 @@ class IndexDef(CompoundDef):
     def signature_plaintext(self, context, fully_qualified=False):
         return self.qualified_name_plaintext(context)
 
-    def kind(self) -> str or None:
+    def kind(self) -> Optional[str]:
         return 'index'
 
     def slug(self):
